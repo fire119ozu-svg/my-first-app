@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { createCase, setRemarks, updateEntry, updateEntryField } from '../logic/inspectionCase';
 import type { BuildingInfo, InspectionCase } from '../types/inspection';
 import { buildWorkbook } from './buildWorkbook';
-import { estimateLines, exportFileName, formatField } from './format';
+import { estimateLines, exportFileName, formatField, formatPerson } from './format';
 
 const building: BuildingInfo = {
-  name: '追手筋テナントビル', address: '高知市本町1丁目', ownerName: '高知太郎', usage: '3ロ', subUsages: [],
+  name: '追手筋テナントビル', address: '高知市本町1丁目', representative: { title: '代表取締役', name: '高知太郎' }, witness: { title: '店長', name: '土佐花子' }, usage: '3ロ', subUsages: [],
   totalFloorArea: 600, floorsAbove: 3, floorsBelow: 1, capacity: 150,
   isHighRise: false, hasWindowlessFloor: false, isSingleStaircase: false, hasMultipleOwners: false,
   installedEquipment: ['extinguisher', 'autoFireAlarm'], facilities: ['kitchen'],
@@ -14,7 +14,7 @@ const building: BuildingInfo = {
 };
 
 function sampleCase(): InspectionCase {
-  let c = createCase(building, { inspectionDate: '2026-11-27', inspectors: ['山田', '佐藤'], witness: '店長' });
+  let c = createCase(building, { inspectionDate: '2026-11-27', inspectors: ['山田', '佐藤'] });
   c = updateEntry(c, 'FM-001', { result: 'compliant' });
   c = updateEntry(c, 'FU-001', { result: 'nonCompliant', memo: 'グリスフィルターに油脂付着' });
   c = updateEntry(c, 'EQ-001', { result: 'compliant' });
@@ -59,6 +59,8 @@ describe('buildWorkbook', () => {
     const all = texts(ws).join('|');
     expect(all).toContain('追手筋テナントビル');
     expect(all).toContain('山田、佐藤');
+    expect(all).toContain('代表者|代表者|代表取締役 高知太郎');
+    expect(all).toContain('立会者|店長 土佐花子');
     expect(all).toContain('3ロ項 飲食店');
     expect(all).toContain('特定防火対象物');
     expect(all).toContain('次回再確認');
@@ -106,6 +108,8 @@ describe('buildWorkbook', () => {
   it('writes building info and notification status', async () => {
     const all = texts((await roundTrip(sampleCase())).getWorksheet('対象物情報')!).join('|');
     expect(all).toContain('消火器、自動火災報知設備');
+    expect(all).toContain('代表者 役職|代表取締役');
+    expect(all).toContain('立会者 氏名|土佐花子');
     expect(all).toContain('防火管理者選任届|済');
     expect(all).toContain('消防計画作成届|未');
     expect(all).toContain('統括防火管理者選任届|未入力');
@@ -116,6 +120,12 @@ describe('format helpers', () => {
   it('builds a safe file name', () => {
     const c = createCase({ ...building, name: 'A/B:ビル 1号' }, { inspectionDate: '2026-11-27', inspectors: [] });
     expect(exportFileName(c)).toBe('立入検査_A_B_ビル_1号_20261127.xlsx');
+  });
+
+  it('formats a person with optional title', () => {
+    expect(formatPerson({ title: '店長', name: '土佐花子' })).toBe('店長 土佐花子');
+    expect(formatPerson({ title: '', name: '土佐花子' })).toBe('土佐花子');
+    expect(formatPerson(undefined)).toBe('');
   });
 
   it('returns empty for unfilled fields', () => {

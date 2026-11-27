@@ -15,12 +15,18 @@ import {
   type ItemFieldDef,
   type ItemFieldValue,
   type LegalBasis,
+  type PersonInfo,
 } from '../types/inspection';
 
 export function formatUsage(b: BuildingInfo): string {
   const u = getUsageInfo(b.usage);
   const subs = b.subUsages.length ? `(${b.subUsages.map((s) => `${s}項`).join('・')})` : '';
   return `${u.code}項 ${u.label}${subs}`;
+}
+
+/** 「役職 氏名」(片方のみの場合はその値) */
+export function formatPerson(p: PersonInfo | undefined): string {
+  return p ? [p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
 }
 
 export function formatSpecified(b: BuildingInfo): string {

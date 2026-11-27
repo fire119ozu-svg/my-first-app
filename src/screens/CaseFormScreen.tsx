@@ -12,7 +12,6 @@ import type { InspectionCase } from '../types/inspection';
 interface MetaForm {
   inspectionDate: string;
   inspectors: string;
-  witness: string;
 }
 
 interface Draft {
@@ -26,17 +25,28 @@ interface Draft {
  */
 const DRAFT_KEY = 'newCaseDraft:v1';
 
+/** 旧形式の下書きに含まれていた項目 */
+interface LegacyDraft {
+  form?: { ownerName?: string };
+  meta?: { witness?: string };
+}
+
 function emptyDraft(): Draft {
-  return { form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: '', witness: '' } };
+  return { form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: '' } };
 }
 
 function loadDraft(): Draft {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
-      const d = JSON.parse(raw) as Partial<Draft>;
+      const d = JSON.parse(raw) as Partial<Draft> & LegacyDraft;
       const e = emptyDraft();
-      return { form: { ...e.form, ...d.form }, meta: { ...e.meta, ...d.meta } };
+      const form = { ...e.form, ...d.form };
+      // 旧形式の下書き(関係者・立会者が文字列)を移行
+      if (d.form?.ownerName && !form.representative.name) form.representative = { title: '', name: d.form.ownerName };
+      if (d.meta?.witness && !form.witness.name) form.witness = { title: '', name: d.meta.witness };
+      delete (form as { ownerName?: string }).ownerName;
+      return { form, meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors: d.meta?.inspectors ?? '' } };
     }
   } catch {
     // 保存領域が使えない環境では空のフォームから開始
@@ -68,7 +78,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
       setExisting(c);
       setDraft({
         form: toBuildingForm(c.building),
-        meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.join('、'), witness: c.witness ?? '' },
+        meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.join('、') },
       });
     });
   }, [caseId, isEdit]);
@@ -105,7 +115,6 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     const meta = {
       inspectionDate: draft.meta.inspectionDate,
       inspectors: parseInspectors(draft.meta.inspectors),
-      witness: draft.meta.witness.trim(),
     };
     setSaving(true);
     try {
@@ -165,7 +174,6 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
             )}
           </Field>
           <TextInput label="検査員" value={draft.meta.inspectors} onChange={(v) => setMeta({ inspectors: v })} placeholder="複数は「、」で区切る" />
-          <TextInput label="立会者" value={draft.meta.witness} onChange={(v) => setMeta({ witness: v })} />
         </Section>
 
         <BuildingForm

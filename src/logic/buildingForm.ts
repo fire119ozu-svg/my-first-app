@@ -2,15 +2,27 @@
  * 対象物情報入力フォームの状態と検証。
  * 数値欄は入力途中の空欄を許すため文字列で保持し、検証時に BuildingInfo へ変換する。
  */
-import type { BuildingInfo, UsageCategory } from '../types/inspection';
+import type { BuildingInfo, PersonInfo, UsageCategory } from '../types/inspection';
 import { isCompositeUsage } from './extractChecklist';
 
 export const NUMERIC_FIELDS = ['totalFloorArea', 'floorsAbove', 'floorsBelow', 'capacity'] as const;
 export type NumericField = (typeof NUMERIC_FIELDS)[number];
 
-export type BuildingFormState = Omit<BuildingInfo, NumericField | 'usage'> & {
+export type BuildingFormState = Omit<BuildingInfo, NumericField | 'usage' | 'representative' | 'witness'> & {
   usage: UsageCategory | '';
+  representative: PersonInfo;
+  witness: PersonInfo;
 } & Record<NumericField, string>;
+
+const emptyPerson = (): PersonInfo => ({ title: '', name: '' });
+
+/** 役職・氏名とも空なら未入力として扱う */
+export function normalizePerson(p: PersonInfo | undefined): PersonInfo | undefined {
+  if (!p) return undefined;
+  const title = p.title.trim();
+  const name = p.name.trim();
+  return title || name ? { title, name } : undefined;
+}
 
 export type FormField = keyof BuildingFormState;
 export type FormErrors = Partial<Record<FormField, string>>;
@@ -19,7 +31,8 @@ export function emptyBuildingForm(): BuildingFormState {
   return {
     name: '',
     address: '',
-    ownerName: '',
+    representative: emptyPerson(),
+    witness: emptyPerson(),
     usage: '',
     subUsages: [],
     totalFloorArea: '',
@@ -39,6 +52,8 @@ export function emptyBuildingForm(): BuildingFormState {
 export function toBuildingForm(b: BuildingInfo): BuildingFormState {
   return {
     ...b,
+    representative: b.representative ?? emptyPerson(),
+    witness: b.witness ?? emptyPerson(),
     totalFloorArea: String(b.totalFloorArea),
     floorsAbove: String(b.floorsAbove),
     floorsBelow: String(b.floorsBelow),
@@ -95,7 +110,8 @@ export function validateBuildingForm(form: BuildingFormState): {
       ...form,
       name: form.name.trim(),
       address: form.address.trim(),
-      ownerName: form.ownerName?.trim() || undefined,
+      representative: normalizePerson(form.representative),
+      witness: normalizePerson(form.witness),
       usage: form.usage,
       subUsages: isCompositeUsage(form.usage) ? form.subUsages : [],
       ...nums,

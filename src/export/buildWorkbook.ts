@@ -19,6 +19,7 @@ import {
   formatField,
   formatFloors,
   formatLegal,
+  formatPerson,
   formatResult,
   formatSpecified,
   formatStatus,
@@ -127,7 +128,7 @@ function addChecklistSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem
   const info: [string, string, string, string][] = [
     ['対象物名称', b.name, '検査日', c.inspectionDate],
     ['所在地', b.address || '', '検査員', c.inspectors.join('、')],
-    ['関係者', b.ownerName ?? '', '立会者', c.witness ?? ''],
+    ['代表者', formatPerson(b.representative), '立会者', formatPerson(b.witness)],
     ['用途', formatUsage(b), '区分', formatSpecified(b)],
     ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`, '階数', formatFloors(b)],
     ['収容人員', `${b.capacity}人`, '状態', formatStatus(c)],
@@ -345,7 +346,10 @@ function addBuildingSheet(wb: Workbook, c: InspectionCase) {
   const rows: [string, string][] = [
     ['名称', b.name],
     ['所在地', b.address],
-    ['関係者', b.ownerName ?? ''],
+    ['代表者 役職', b.representative?.title ?? ''],
+    ['代表者 氏名', b.representative?.name ?? ''],
+    ['立会者 役職', b.witness?.title ?? ''],
+    ['立会者 氏名', b.witness?.name ?? ''],
     ['用途', formatUsage(b)],
     ['区分', formatSpecified(b)],
     ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`],

@@ -87,13 +87,22 @@ export type FacilityType =
 // 対象物情報
 // ---------------------------------------------------------------------------
 
+/** 関係者の役職・氏名 */
+export interface PersonInfo {
+  /** 役職(例:代表取締役、店長、防火管理者) */
+  title: string;
+  name: string;
+}
+
 export interface BuildingInfo {
   /** 対象物名称 */
   name: string;
   /** 所在地 */
   address: string;
-  /** 関係者(所有者・管理者・占有者)氏名 */
-  ownerName?: string;
+  /** 代表者(所有者・管理者・占有者等の代表) */
+  representative?: PersonInfo;
+  /** 立会者 */
+  witness?: PersonInfo;
   /** 主たる用途の項 */
   usage: UsageCategory;
   /** 複合用途(16項)の場合に含まれる用途 */
@@ -262,8 +271,6 @@ export interface InspectionCase {
   inspectionDate: string;
   /** 検査員 */
   inspectors: string[];
-  /** 立会者 */
-  witness?: string;
   building: BuildingInfo;
   /** 抽出された項目IDの並び(抽出時点のスナップショット) */
   itemIds: string[];

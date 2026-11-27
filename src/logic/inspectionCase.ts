@@ -15,7 +15,6 @@ import { extractChecklistItems, sortChecklistItems } from './extractChecklist';
 export interface CaseMeta {
   inspectionDate: string;
   inspectors: string[];
-  witness?: string;
 }
 
 export function newId(): string {
@@ -44,7 +43,6 @@ export function createCase(building: BuildingInfo, meta: CaseMeta, now = new Dat
     status: 'draft',
     inspectionDate: meta.inspectionDate,
     inspectors: meta.inspectors,
-    witness: meta.witness || undefined,
     building,
     itemIds: extractChecklistItems(building).map((i) => i.id),
     entries: {},
@@ -81,7 +79,6 @@ export function updateBuilding(
     building,
     inspectionDate: meta.inspectionDate,
     inspectors: meta.inspectors,
-    witness: meta.witness || undefined,
     itemIds: sortItemIds([...extracted, ...keep]),
     updatedAt: now.toISOString(),
   };

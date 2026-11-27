@@ -29,6 +29,16 @@ describe('validateBuildingForm', () => {
     expect(building).toMatchObject({ name: '○○ビル', totalFloorArea: 800, floorsAbove: 3, floorsBelow: 0, capacity: 60 });
   });
 
+  it('trims people and treats blank ones as not entered', () => {
+    const { building } = validateBuildingForm({
+      ...valid,
+      representative: { title: ' 代表取締役 ', name: ' 高知太郎 ' },
+      witness: { title: ' ', name: '' },
+    });
+    expect(building?.representative).toEqual({ title: '代表取締役', name: '高知太郎' });
+    expect(building?.witness).toBeUndefined();
+  });
+
   it('reports required fields', () => {
     const { building, errors } = validateBuildingForm(emptyBuildingForm());
     expect(building).toBeNull();

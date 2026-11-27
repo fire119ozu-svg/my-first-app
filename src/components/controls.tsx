@@ -159,3 +159,41 @@ export function Segmented<T extends string>(props: {
     </div>
   );
 }
+
+/** 役職・氏名の入力(横並び。iPhoneの幅でも2列で収まる) */
+export function PersonInput(props: {
+  label: string;
+  value: { title: string; name: string };
+  onChange: (v: { title: string; name: string }) => void;
+  titlePlaceholder?: string;
+}) {
+  const id = useId();
+  return (
+    <fieldset className="field person-field">
+      <legend className="field-label">{props.label}</legend>
+      <div className="person-row">
+        <div>
+          <label htmlFor={`${id}-title`} className="sub-label">役職</label>
+          <input
+            id={`${id}-title`}
+            type="text"
+            value={props.value.title}
+            placeholder={props.titlePlaceholder}
+            aria-label={`${props.label}の役職`}
+            onChange={(e) => props.onChange({ ...props.value, title: e.target.value })}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${id}-name`} className="sub-label">氏名</label>
+          <input
+            id={`${id}-name`}
+            type="text"
+            value={props.value.name}
+            aria-label={`${props.label}の氏名`}
+            onChange={(e) => props.onChange({ ...props.value, name: e.target.value })}
+          />
+        </div>
+      </div>
+    </fieldset>
+  );
+}

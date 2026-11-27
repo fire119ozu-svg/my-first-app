@@ -3,7 +3,7 @@ import { USAGE_CATEGORIES } from '../data/usageCategories';
 import type { BuildingFormState, FormErrors } from '../logic/buildingForm';
 import { isCompositeUsage } from '../logic/extractChecklist';
 import type { UsageCategory } from '../types/inspection';
-import { ChipGroup, Field, NumberInput, Section, Segmented, TextInput, Toggle } from './controls';
+import { ChipGroup, Field, NumberInput, PersonInput, Section, Segmented, TextInput, Toggle } from './controls';
 
 /** 複合用途の構成用途として選べるもの(16項以降を除く) */
 const SUB_USAGE_OPTIONS = USAGE_CATEGORIES.filter(
@@ -25,7 +25,8 @@ export function BuildingForm({ form, errors, onChange }: Props) {
       <Section title="基本情報">
         <TextInput label="名称" required value={form.name} error={errors.name} onChange={(v) => set('name', v)} placeholder="例:○○ビル" />
         <TextInput label="所在地" value={form.address} onChange={(v) => set('address', v)} placeholder="例:高知市本町○丁目" />
-        <TextInput label="関係者(所有者・管理者等)" value={form.ownerName ?? ''} onChange={(v) => set('ownerName', v)} />
+        <PersonInput label="代表者" titlePlaceholder="例:代表取締役" value={form.representative} onChange={(v) => set('representative', v)} />
+        <PersonInput label="立会者" titlePlaceholder="例:防火管理者" value={form.witness} onChange={(v) => set('witness', v)} />
         <Field label="用途(令別表第一)" required error={errors.usage}>
           {(id) => (
             <select

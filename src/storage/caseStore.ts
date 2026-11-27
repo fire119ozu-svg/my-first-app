@@ -3,6 +3,7 @@
  * データは端末のブラウザ内にのみ保存され、外部へは送信されない。
  */
 import type { InspectionCase } from '../types/inspection';
+import { migrateCase } from './migrate';
 
 const DB_NAME = 'fire-inspection';
 const DB_VERSION = 1;
@@ -57,12 +58,13 @@ function run<T>(
 
 /** 更新日時の新しい順 */
 export async function listCases(): Promise<InspectionCase[]> {
-  const all = await run<InspectionCase[]>('readonly', (s) => s.getAll());
+  const all = (await run<InspectionCase[]>('readonly', (s) => s.getAll())).map(migrateCase);
   return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function getCase(id: string): Promise<InspectionCase | undefined> {
-  return run<InspectionCase | undefined>('readonly', (s) => s.get(id));
+export async function getCase(id: string): Promise<InspectionCase | undefined> {
+  const c = await run<InspectionCase | undefined>('readonly', (s) => s.get(id));
+  return c && migrateCase(c);
 }
 
 export async function saveCase(c: InspectionCase): Promise<void> {
