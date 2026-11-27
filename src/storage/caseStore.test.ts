@@ -2,7 +2,8 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../logic/inspectionCase';
 import type { BuildingInfo } from '../types/inspection';
-import { deleteCase, getCase, listCases, saveCase } from './caseStore';
+import { deleteCase, deletePhoto, getCase, getPhoto, listCases, listPhotosByCase, saveCase, savePhoto } from './caseStore';
+import type { PhotoRecord } from '../types/inspection';
 
 const building: BuildingInfo = {
   name: 'A', address: '', usage: '15', subUsages: [], totalFloorArea: 100, floorsAbove: 1,
@@ -22,5 +23,32 @@ describe('caseStore', () => {
     await deleteCase(a.id);
     expect(await getCase(a.id)).toBeUndefined();
     expect(await listCases()).toHaveLength(1);
+  });
+
+  it('stores photos per case and deletes them with the case', async () => {
+    const c = createCase({ ...building, name: 'P' }, meta);
+    const other = createCase({ ...building, name: 'Q' }, meta);
+    await saveCase(c);
+    await saveCase(other);
+    const photo = (id: string, caseId: string): PhotoRecord => ({
+      id, caseId, itemId: 'FM-001',
+      blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }),
+      thumb: new Blob([new Uint8Array([1])], { type: 'image/jpeg' }),
+      width: 3, height: 1, createdAt: '2026-11-27T00:00:00Z',
+    });
+    await savePhoto(photo('a', c.id));
+    await savePhoto(photo('b', c.id));
+    await savePhoto(photo('x', other.id));
+    expect((await listPhotosByCase(c.id)).map((p) => p.id).sort()).toEqual(['a', 'b']);
+    const a = await getPhoto('a');
+    expect(a?.width).toBe(3);
+    expect(new Uint8Array(await a!.blob.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+
+    await deletePhoto('a');
+    expect(await getPhoto('a')).toBeUndefined();
+
+    await deleteCase(c.id);
+    expect(await listPhotosByCase(c.id)).toEqual([]);
+    expect(await getPhoto('x')).toBeDefined(); // 他の案件の写真は残る
   });
 });

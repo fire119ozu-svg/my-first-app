@@ -5,13 +5,14 @@
  *   1. チェックリスト … 案件情報・判定集計・全項目の判定/記録/メモ・備考
  *   2. 指摘事項       … 判定「否」の項目のみ(指導・通知書作成用)
  *   3. 階別記録       … 階ごとの入力欄(消火器の能力単位など)がある場合のみ
- *   4. 対象物情報     … 入力した対象物情報と届出状況
+ *   4. 写真           … 添付写真がある場合のみ(項目ごとに画像を貼り付け)
+ *   5. 対象物情報     … 入力した対象物情報と届出状況
  */
 import type ExcelJS from 'exceljs';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
 import { caseProgress } from '../logic/inspectionCase';
-import type { ChecklistItem, CheckResult, InspectionCase } from '../types/inspection';
+import type { ChecklistItem, CheckResult, FloorKey, InspectionCase } from '../types/inspection';
 import {
   estimateLines,
   formatEquipment,
@@ -94,6 +95,40 @@ function printSetup(ws: Worksheet, headerRow?: number) {
   ws.headerFooter = { oddFooter: '&C&P / &N' };
 }
 
+/** 出力する写真(画像データは読み込み済み) */
+export interface ExportPhoto {
+  id: string;
+  itemId: string;
+  /** JPEG データ */
+  data: ArrayBuffer | Uint8Array;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
+interface Ctx {
+  c: InspectionCase;
+  items: ChecklistItem[];
+  floors: FloorKey[];
+  photos: Map<string, ExportPhoto>;
+}
+
+/** 項目に添付され、出力できる写真(添付順) */
+function itemPhotos(ctx: Ctx, itemId: string): ExportPhoto[] {
+  return (ctx.c.entries[itemId]?.photoIds ?? [])
+    .map((id) => ctx.photos.get(id))
+    .filter((p): p is ExportPhoto => p !== undefined);
+}
+
+/** 記録事項セル:追加入力欄の値と写真枚数 */
+function recordText(ctx: Ctx, item: ChecklistItem): string {
+  const entry = ctx.c.entries[item.id];
+  const lines = (item.fields ?? []).map((d) => formatField(d, entry?.fields?.[d.key], ctx.floors)).filter(Boolean);
+  const n = itemPhotos(ctx, item.id).length;
+  if (n > 0) lines.push(`写真 ${n}枚(「写真」シート)`);
+  return lines.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // 1. チェックリスト
 // ---------------------------------------------------------------------------
@@ -110,11 +145,11 @@ const LIST_COLUMNS = [
 ];
 const LIST_WIDTHS = LIST_COLUMNS.map((c) => c.width);
 
-function addChecklistSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem[], exportedAt: Date) {
+function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
+  const { c, items } = ctx;
   const ws = wb.addWorksheet('チェックリスト', { views: [{ state: 'frozen', ySplit: 0 }] });
   ws.columns = LIST_COLUMNS.map((col) => ({ width: col.width }));
   const b = c.building;
-  const floors = floorKeys(b);
 
   // タイトル
   ws.mergeCells('A1:H1');
@@ -177,10 +212,7 @@ function addChecklistSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem
   items.forEach((item, idx) => {
     const entry = c.entries[item.id];
     const result = entry?.result ?? null;
-    const record = (item.fields ?? [])
-      .map((def) => formatField(def, entry?.fields?.[def.key], floors))
-      .filter(Boolean)
-      .join('\n');
+    const record = recordText(ctx, item);
     const row = ws.getRow(r);
     row.values = [
       idx + 1,
@@ -230,7 +262,8 @@ function addChecklistSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem
 // 2. 指摘事項
 // ---------------------------------------------------------------------------
 
-function addFindingsSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem[]) {
+function addFindingsSheet(wb: Workbook, ctx: Ctx) {
+  const { c, items } = ctx;
   const ws = wb.addWorksheet('指摘事項');
   const cols = [
     { header: 'No', width: 5 },
@@ -254,7 +287,6 @@ function addFindingsSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem[
   });
   header.height = 20;
 
-  const floors = floorKeys(c.building);
   const ng = items.filter((i) => c.entries[i.id]?.result === 'nonCompliant');
   if (ng.length === 0) {
     ws.mergeCells('A4:E4');
@@ -270,7 +302,7 @@ function addFindingsSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem[
       `${item.title}\n(${item.id})`,
       formatLegal(item.legalBasis),
       entry?.memo || '(指摘内容未記入)',
-      (item.fields ?? []).map((d) => formatField(d, entry?.fields?.[d.key], floors)).filter(Boolean).join('\n'),
+      recordText(ctx, item),
     ];
     row.eachCell({ includeEmpty: true }, (cell, col) => style(cell, { center: col === 1 }));
     fitRowHeight(ws, row, widths);
@@ -387,14 +419,101 @@ function addBuildingSheet(wb: Workbook, c: InspectionCase) {
 
 // ---------------------------------------------------------------------------
 
-export function buildWorkbook(ExcelJSLib: typeof ExcelJS, c: InspectionCase, exportedAt = new Date()): Workbook {
+// ---------------------------------------------------------------------------
+// 4. 写真
+// ---------------------------------------------------------------------------
+
+/** 1枚あたりの表示枠(px)。2枚並べてA4縦に収まる大きさ */
+const PHOTO_BOX = { width: 330, height: 250 };
+const PHOTO_COL_WIDTH = 49; // ≒ 348px
+
+function addPhotoSheet(wb: Workbook, ctx: Ctx) {
+  const { c, items } = ctx;
+  const groups = items
+    .map((item, idx) => ({ item, no: idx + 1, photos: itemPhotos(ctx, item.id) }))
+    .filter((g) => g.photos.length > 0);
+  if (groups.length === 0) return;
+
+  const ws = wb.addWorksheet('写真');
+  ws.columns = [{ width: PHOTO_COL_WIDTH }, { width: PHOTO_COL_WIDTH }];
+  ws.mergeCells('A1:B1');
+  ws.getCell('A1').value = `写真 ${c.building.name}(検査日 ${c.inspectionDate})`;
+  ws.getCell('A1').font = { name: FONT, size: 14, bold: true };
+  ws.getRow(1).height = 24;
+
+  let r = 3;
+  for (const { item, no, photos } of groups) {
+    const entry = c.entries[item.id];
+    ws.mergeCells(r, 1, r, 2);
+    const head = ws.getCell(r, 1);
+    head.value = `No.${no} ${item.title}(${item.id}) 判定:${formatResult(entry?.result)}`;
+    const res = entry?.result ?? 'pending';
+    style(head, { bold: true, fill: COLOR.labelFill, color: RESULT_STYLE[res].color });
+    ws.getRow(r).height = 20;
+    r++;
+
+    if (entry?.memo.trim()) {
+      ws.mergeCells(r, 1, r, 2);
+      const memo = ws.getCell(r, 1);
+      memo.value = entry.memo;
+      style(memo);
+      ws.getRow(r).height = Math.max(18, estimateLines(entry.memo, PHOTO_COL_WIDTH * 2) * LINE_HEIGHT + 4);
+      r++;
+    }
+
+    for (let i = 0; i < photos.length; i += 2) {
+      const pair = photos.slice(i, i + 2);
+      const sizes = pair.map((p) => {
+        const scale = Math.min(PHOTO_BOX.width / p.width, PHOTO_BOX.height / p.height, 1);
+        return { width: Math.round(p.width * scale), height: Math.round(p.height * scale) };
+      });
+      const rowPx = Math.max(...sizes.map((s) => s.height)) + 8;
+      ws.getRow(r).height = rowPx * 0.75; // px → pt
+      pair.forEach((p, j) => {
+        const imageId = wb.addImage({
+          // ExcelJS はブラウザでは ArrayBuffer も受け付ける(型定義は Node の Buffer)
+          buffer: p.data as unknown as ExcelJS.Buffer,
+          extension: 'jpeg',
+        });
+        ws.addImage(imageId, {
+          tl: { col: j + 0.02, row: r - 1 + 0.02 },
+          ext: sizes[j],
+          editAs: 'oneCell',
+        });
+        const cap = ws.getCell(r + 1, j + 1);
+        cap.value = `写真${i + j + 1} ${new Date(p.createdAt).toLocaleString('ja-JP')}`;
+        cap.font = { name: FONT, size: 9, color: { argb: 'FF6E6E73' } };
+      });
+      ws.getRow(r + 1).height = 16;
+      r += 2;
+    }
+    r++;
+  }
+  printSetup(ws);
+  ws.pageSetup.orientation = 'portrait';
+}
+
+export interface BuildOptions {
+  exportedAt?: Date;
+  /** 添付写真(省略時は写真シートを作らない) */
+  photos?: ExportPhoto[];
+}
+
+export function buildWorkbook(ExcelJSLib: typeof ExcelJS, c: InspectionCase, opts: BuildOptions = {}): Workbook {
+  const exportedAt = opts.exportedAt ?? new Date();
   const wb = new ExcelJSLib.Workbook();
   wb.creator = '消防立入検査チェックリスト';
   wb.created = exportedAt;
-  const items = caseItems(c);
-  addChecklistSheet(wb, c, items, exportedAt);
-  addFindingsSheet(wb, c, items);
-  addPerFloorSheet(wb, c, items);
+  const ctx: Ctx = {
+    c,
+    items: caseItems(c),
+    floors: floorKeys(c.building),
+    photos: new Map((opts.photos ?? []).map((p) => [p.id, p])),
+  };
+  addChecklistSheet(wb, ctx, exportedAt);
+  addFindingsSheet(wb, ctx);
+  addPerFloorSheet(wb, c, ctx.items);
+  addPhotoSheet(wb, ctx);
   addBuildingSheet(wb, c);
   return wb;
 }
