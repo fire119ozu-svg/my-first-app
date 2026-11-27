@@ -58,6 +58,24 @@ npm test         # 単体テスト(vitest)
 
 PWAとしてホーム画面に追加するにはHTTPSで配信する必要がある(GitHub Pages 等)。
 
+## GitHub Pages での公開
+
+`.github/workflows/deploy.yml` により、`main` ブランチへの push でテスト → ビルド → 公開が自動で行われる
+(Actions タブの「Deploy to GitHub Pages」から手動実行も可能)。
+
+初回のみ:
+
+1. リポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする
+2. 作業ブランチを `main` にマージする
+
+公開URL: `https://<ユーザー名>.github.io/<リポジトリ名>/`
+
+iPhoneでは Safari で公開URLを開き、共有ボタン →「ホーム画面に追加」。
+一度開けば以降はオフラインでも起動できる。更新は次回オンラインで起動したときに自動で反映される。
+
+> 公開されるのはアプリ本体(プログラムとチェック項目マスタ)のみ。案件データは各端末内にだけ保存され、サーバーには送信されない。
+> 非公開(private)リポジトリで GitHub Pages を使うには有料プラン(GitHub Pro 等)が必要で、その場合も公開したサイト自体は誰でも閲覧できる。
+
 ## チェック項目マスタについて
 
 適用条件は主要な設置基準を簡略化したもので、構造による面積緩和・階ごとの判定・免除特例は含まない。
