@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ExportSheet } from '../components/ExportSheet';
 import { Header, HeaderLink } from '../components/Header';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { groupByCategory } from '../logic/extractChecklist';
@@ -28,6 +29,7 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   const [data, setData] = useState<InspectionCase | null | undefined>(undefined);
   const [filter, setFilter] = useState<Filter>('all');
   const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [exporting, setExporting] = useState(false);
   const current = useRef<InspectionCase | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
 
@@ -215,15 +217,30 @@ export function CheckScreen({ caseId }: { caseId: string }) {
         </section>
       </main>
 
-      {!readOnly && (
-        <footer className="action-bar">
-          <span className="action-count">
-            進捗 <strong>{pct}</strong>%
-          </span>
+      <footer className="action-bar">
+        <span className="action-count">
+          進捗 <strong>{pct}</strong>%
+        </span>
+        <button
+          type="button"
+          className={readOnly ? 'primary-btn' : 'secondary-btn'}
+          onClick={() => setExporting(true)}
+        >
+          Excel出力
+        </button>
+        {!readOnly && (
           <button type="button" className="primary-btn" onClick={complete}>
             検査完了
           </button>
-        </footer>
+        )}
+      </footer>
+
+      {exporting && (
+        <ExportSheet
+          data={data}
+          pendingCount={progress.total - progress.done}
+          onClose={() => setExporting(false)}
+        />
       )}
     </>
   );

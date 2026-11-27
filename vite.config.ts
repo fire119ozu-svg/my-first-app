@@ -6,6 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // 全アセットをService Workerでプリキャッシュし、電波のない現場でも起動できるようにする。
 export default defineConfig({
   base: './',
+  // ExcelJS(約0.9MB)は出力時に遅延読み込みし、Service Workerでプリキャッシュする
+  build: { chunkSizeWarningLimit: 1000 },
   plugins: [
     react(),
     VitePWA({

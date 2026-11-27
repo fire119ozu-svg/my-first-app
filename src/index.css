@@ -538,3 +538,82 @@ fieldset.item-field > legend + * { clear: both; }
 .floor-total strong { font-size: 1.15rem; }
 .floor-total small { margin-left: 6px; color: var(--color-muted); }
 .floor-total .field-error { margin: 0; }
+
+/* ---------- ボタン(副) ---------- */
+.secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.secondary-btn:active { background: var(--color-primary-weak); }
+.text-btn {
+  min-height: var(--tap-min);
+  border: none;
+  background: none;
+  color: var(--color-muted);
+}
+.wide { width: 100%; justify-content: center; }
+.small { font-size: 0.75rem; }
+
+/* ---------- 下から出るパネル(Excel出力) ---------- */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  animation: fade-in 0.15s ease-out;
+}
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  padding: 20px 16px calc(env(safe-area-inset-bottom) + 12px);
+  border-radius: 16px 16px 0 0;
+  background: var(--color-surface);
+  animation: slide-up 0.2s ease-out;
+}
+.sheet h2 { margin: 0 0 12px; font-size: 1.1rem; }
+.sheet-warn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff4e0;
+  color: var(--color-warn);
+  font-size: 0.85rem;
+}
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.file-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 52px;
+  border-radius: 6px;
+  background: #1d6f42;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+.file-meta { display: flex; flex-direction: column; min-width: 0; }
+.file-name { overflow-wrap: anywhere; font-weight: 600; font-size: 0.9rem; }
+.file-meta small { color: var(--color-muted); font-size: 0.75rem; }
+.sheet-actions { display: grid; gap: 10px; margin: 16px 0 8px; }
+.sheet-message { margin: 8px 0; color: var(--color-ok); font-size: 0.85rem; }
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
