@@ -72,20 +72,23 @@ export function evaluateCondition(cond: ApplicabilityCondition, building: Buildi
   }
 }
 
+/** カテゴリ順 → マスタ内の順に並べ替える */
+export function sortChecklistItems(items: ChecklistItem[]): ChecklistItem[] {
+  const catOrder = new Map(CATEGORY_ORDER.map((c, i) => [c, i]));
+  const masterOrder = new Map(CHECKLIST_ITEMS.map((item, i) => [item.id, i]));
+  return [...items].sort(
+    (a, b) =>
+      (catOrder.get(a.category) ?? 99) - (catOrder.get(b.category) ?? 99) ||
+      (masterOrder.get(a.id) ?? 0) - (masterOrder.get(b.id) ?? 0),
+  );
+}
+
 /** 対象物に適用されるチェック項目を、カテゴリ順・マスタ順で返す */
 export function extractChecklistItems(
   building: BuildingInfo,
   items: ChecklistItem[] = CHECKLIST_ITEMS,
 ): ChecklistItem[] {
-  const order = new Map(CATEGORY_ORDER.map((c, i) => [c, i]));
-  return items
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => evaluateCondition(item.condition, building))
-    .sort(
-      (a, b) =>
-        (order.get(a.item.category) ?? 99) - (order.get(b.item.category) ?? 99) || a.index - b.index,
-    )
-    .map(({ item }) => item);
+  return sortChecklistItems(items.filter((item) => evaluateCondition(item.condition, building)));
 }
 
 /** カテゴリごとにグループ化(現場画面・プレビュー表示用) */

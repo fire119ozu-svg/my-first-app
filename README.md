@@ -15,13 +15,24 @@ Vite + React + TypeScript / vite-plugin-pwa / ExcelJS
 
 ```
 src/
-  types/inspection.ts      型定義(対象物情報・チェック項目・適用条件・案件)
-  data/usageCategories.ts  令別表第一の用途区分
-  data/checklistItems.ts   チェック項目マスタ(消防法令・高知市火災予防条例)
-  App.tsx / main.tsx       画面(実装中)
+  types/inspection.ts       型定義(対象物情報・チェック項目・適用条件・案件)
+  data/                     用途区分・チェック項目マスタ・表示ラベル
+  logic/extractChecklist.ts 適用条件の評価とチェック項目の抽出
+  logic/buildingForm.ts     入力フォームの状態と検証
+  logic/inspectionCase.ts   案件の生成・判定入力・再抽出・進捗
+  storage/caseStore.ts      案件の端末内保存(IndexedDB)
+  screens/                  案件一覧・対象物入力/編集・現場チェック
+  components/               フォーム部品・ヘッダー
+  router.ts                 ハッシュルーティング(#/ , #/new , #/case/:id , #/case/:id/edit)
 ```
 
-予定:`src/logic/`(項目抽出)、`src/storage/`(IndexedDB保存)、`src/export/`(xlsx出力)、`src/components/`(画面)。
+予定:`src/export/`(xlsx出力)。
+
+## データの保存について
+
+案件は端末のブラウザ内(IndexedDB)にのみ保存される。判定・メモは入力のたびに即時保存する。
+Safariはホーム画面に追加していないサイトのデータを一定期間未使用で削除することがあるため、
+現場ではホーム画面に追加したアプリから利用すること。
 
 ## 開発
 
@@ -29,6 +40,7 @@ src/
 npm install
 npm run dev      # 同一LANのiPhoneから http://<PCのIP>:5173 で確認
 npm run build    # dist/ を静的ホスティングに配置
+npm test         # 単体テスト(vitest)
 ```
 
 PWAとしてホーム画面に追加するにはHTTPSで配信する必要がある(GitHub Pages 等)。
