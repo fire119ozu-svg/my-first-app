@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Header, HeaderLink } from '../components/Header';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { groupByCategory } from '../logic/extractChecklist';
-import { caseProgress, setRemarks, setStatus, updateEntry } from '../logic/inspectionCase';
+import { asPerFloor, asText, floorKeys, floorLabel, sumPerFloor } from '../logic/floors';
+import { caseProgress, setRemarks, setStatus, updateEntry, updateEntryField } from '../logic/inspectionCase';
 import { paths } from '../router';
 import { getCase, saveCase } from '../storage/caseStore';
 import {
@@ -10,7 +11,10 @@ import {
   type CheckEntry,
   type CheckResult,
   type ChecklistItem,
+  type FloorKey,
   type InspectionCase,
+  type ItemFieldDef,
+  type ItemFieldValue,
   type Severity,
 } from '../types/inspection';
 
@@ -59,6 +63,16 @@ export function CheckScreen({ caseId }: { caseId: string }) {
     (itemId: string, memo: string) => commit((c) => updateEntry(c, itemId, { memo })),
     [commit],
   );
+
+  const onField = useCallback(
+    (itemId: string, key: string, value: ItemFieldValue) =>
+      commit((c) => updateEntryField(c, itemId, key, value)),
+    [commit],
+  );
+
+  const floorsAbove = data?.building.floorsAbove ?? 0;
+  const floorsBelow = data?.building.floorsBelow ?? 0;
+  const floors = useMemo(() => floorKeys({ floorsAbove, floorsBelow }), [floorsAbove, floorsBelow]);
 
   const items = useMemo(
     () =>
@@ -179,9 +193,11 @@ export function CheckScreen({ caseId }: { caseId: string }) {
                 key={item.id}
                 item={item}
                 entry={data.entries[item.id]}
+                floors={floors}
                 readOnly={readOnly}
                 onResult={onResult}
                 onMemo={onMemo}
+                onField={onField}
               />
             ))}
           </section>
@@ -216,13 +232,15 @@ export function CheckScreen({ caseId }: { caseId: string }) {
 interface CardProps {
   item: ChecklistItem;
   entry: CheckEntry | undefined;
+  floors: FloorKey[];
   readOnly: boolean;
   onResult: (itemId: string, result: CheckResult | null) => void;
   onMemo: (itemId: string, memo: string) => void;
+  onField: (itemId: string, key: string, value: ItemFieldValue) => void;
 }
 
 /** 1項目ぶんのカード。判定ボタンは再タップで未判定に戻せる。 */
-const CheckItemCard = memo(function CheckItemCard({ item, entry, readOnly, onResult, onMemo }: CardProps) {
+const CheckItemCard = memo(function CheckItemCard({ item, entry, floors, readOnly, onResult, onMemo, onField }: CardProps) {
   const result = entry?.result ?? null;
   return (
     <article className={`check-card${result ? ` r-${result}` : ''}`}>
@@ -259,6 +277,16 @@ const CheckItemCard = memo(function CheckItemCard({ item, entry, readOnly, onRes
           </button>
         ))}
       </div>
+      {item.fields?.map((def) => (
+        <ItemField
+          key={def.key}
+          def={def}
+          value={entry?.fields?.[def.key]}
+          floors={floors}
+          readOnly={readOnly}
+          onChange={(v) => onField(item.id, def.key, v)}
+        />
+      ))}
       <AutoTextarea
         className="memo"
         value={entry?.memo ?? ''}
@@ -270,6 +298,71 @@ const CheckItemCard = memo(function CheckItemCard({ item, entry, readOnly, onRes
     </article>
   );
 });
+
+/** 項目ごとの追加入力欄(テキスト/階ごとの数値) */
+function ItemField(props: {
+  def: ItemFieldDef;
+  value: ItemFieldValue | undefined;
+  floors: FloorKey[];
+  readOnly: boolean;
+  onChange: (v: ItemFieldValue) => void;
+}) {
+  const { def, value, floors, readOnly, onChange } = props;
+  const id = useId();
+
+  if (def.kind === 'text') {
+    return (
+      <div className="item-field">
+        <label htmlFor={id} className="item-field-label">{def.label}</label>
+        <input
+          id={id}
+          type="text"
+          className="item-field-input"
+          value={asText(value)}
+          placeholder={def.placeholder}
+          disabled={readOnly}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    );
+  }
+
+  const perFloor = asPerFloor(value);
+  const sum = sumPerFloor(value, floors);
+  return (
+    <fieldset className="item-field">
+      <legend className="item-field-label">{def.label}</legend>
+      {floors.length === 0 ? (
+        <p className="muted">階数が未設定です。</p>
+      ) : (
+        <div className="floor-grid">
+          {floors.map((f) => (
+            <label key={f} className="floor-row">
+              <span className="floor-name">{floorLabel(f)}</span>
+              <input
+                type="text"
+                inputMode={def.decimal ? 'decimal' : 'numeric'}
+                className="item-field-input num"
+                value={perFloor[f] ?? ''}
+                disabled={readOnly}
+                aria-label={`${floorLabel(f)}の${def.label}`}
+                onChange={(e) => onChange({ ...perFloor, [f]: e.target.value })}
+              />
+              <span className="unit">{def.unit}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="floor-total">
+        {sum.invalid > 0 && <span className="field-error">数値でない入力が {sum.invalid} 件あります</span>}
+        <span>
+          合計 <strong>{sum.total}</strong> {def.unit}
+          <small>({sum.filled}/{floors.length}階 入力)</small>
+        </span>
+      </div>
+    </fieldset>
+  );
+}
 
 /** 入力量に合わせて高さが伸びるテキストエリア */
 function AutoTextarea(props: {

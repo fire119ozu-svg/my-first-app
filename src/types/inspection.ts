@@ -198,7 +198,34 @@ export interface ChecklistItem {
   severity: Severity;
   /** 補足(設置基準の詳細・例外など) */
   note?: string;
+  /** 判定・メモ以外に現場で記録する入力欄 */
+  fields?: ItemFieldDef[];
 }
+
+/**
+ * 項目ごとの追加入力欄の定義。
+ * key は保存データと紐づくため変更しないこと。
+ */
+export type ItemFieldDef =
+  | { key: string; kind: 'text'; label: string; placeholder?: string }
+  | {
+      key: string;
+      /** 階ごとの数値入力(階は対象物の地上・地下階数から生成) */
+      kind: 'perFloorNumber';
+      label: string;
+      unit: string;
+      /** 小数を許可するか */
+      decimal?: boolean;
+    };
+
+/** 階の識別子:地上は "1","2"…、地下は "B1","B2"… */
+export type FloorKey = string;
+
+/**
+ * 追加入力欄の値。入力途中の空欄を許すため文字列で保持する。
+ * text → string、perFloorNumber → 階ごとの文字列
+ */
+export type ItemFieldValue = string | Record<FloorKey, string>;
 
 // ---------------------------------------------------------------------------
 // 検査案件・チェック結果
@@ -218,6 +245,8 @@ export interface CheckEntry {
   /** 未判定は null */
   result: CheckResult | null;
   memo: string;
+  /** 追加入力欄の値(ItemFieldDef.key → 値) */
+  fields?: Record<string, ItemFieldValue>;
   /** ISO 8601 */
   updatedAt: string;
 }

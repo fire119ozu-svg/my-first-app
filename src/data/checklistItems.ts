@@ -237,6 +237,9 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     ),
     severity: 'high',
     note: '地階・無窓階・3階以上の階は床面積50㎡以上で設置が必要(階ごとに判定)。3項は火を使用する設備器具があれば面積によらず必要。',
+    fields: [
+      { key: 'abilityUnits', kind: 'perFloorNumber', label: '設置能力単位(階ごと)', unit: '単位', decimal: true },
+    ],
   },
   {
     id: 'EQ-002',
@@ -298,6 +301,9 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     ),
     severity: 'high',
     note: '6項ハは利用者を入居・宿泊させるものは面積によらず必要。地階・無窓階・3階以上の階は階ごとの基準あり。',
+    fields: [
+      { key: 'receiverLocation', kind: 'text', label: '受信機設置場所', placeholder: '例:1階 管理人室' },
+    ],
   },
   {
     id: 'EQ-005',

@@ -8,6 +8,7 @@ import type {
   CheckEntry,
   CheckResult,
   InspectionCase,
+  ItemFieldValue,
 } from '../types/inspection';
 import { extractChecklistItems, sortChecklistItems } from './extractChecklist';
 
@@ -53,8 +54,14 @@ export function createCase(building: BuildingInfo, meta: CaseMeta, now = new Dat
   };
 }
 
+function hasFieldInput(fields: CheckEntry['fields']): boolean {
+  return Object.values(fields ?? {}).some((v) =>
+    typeof v === 'string' ? v.trim() !== '' : Object.values(v).some((x) => x.trim() !== ''),
+  );
+}
+
 function hasInput(e: CheckEntry | undefined): boolean {
-  return !!e && (e.result !== null || e.memo.trim() !== '');
+  return !!e && (e.result !== null || e.memo.trim() !== '' || hasFieldInput(e.fields));
 }
 
 /**
@@ -89,7 +96,7 @@ function sortItemIds(ids: string[]): string[] {
 export function updateEntry(
   c: InspectionCase,
   itemId: string,
-  patch: Partial<Pick<CheckEntry, 'result' | 'memo'>>,
+  patch: Partial<Pick<CheckEntry, 'result' | 'memo' | 'fields'>>,
   now = new Date(),
 ): InspectionCase {
   const ts = now.toISOString();
@@ -101,6 +108,18 @@ export function updateEntry(
     entries: { ...c.entries, [itemId]: { ...prev, ...patch, updatedAt: ts } },
     updatedAt: ts,
   };
+}
+
+/** 追加入力欄の値を更新する */
+export function updateEntryField(
+  c: InspectionCase,
+  itemId: string,
+  key: string,
+  value: ItemFieldValue,
+  now = new Date(),
+): InspectionCase {
+  const fields = { ...c.entries[itemId]?.fields, [key]: value };
+  return updateEntry(c, itemId, { fields }, now);
 }
 
 export function setStatus(c: InspectionCase, status: CaseStatus, now = new Date()): InspectionCase {

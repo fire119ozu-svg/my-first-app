@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BuildingInfo } from '../types/inspection';
-import { caseProgress, createCase, parseInspectors, today, updateBuilding, updateEntry } from './inspectionCase';
+import { caseProgress, createCase, parseInspectors, today, updateBuilding, updateEntry, updateEntryField } from './inspectionCase';
 
 const base: BuildingInfo = {
   name: '飲食店', address: '高知市', usage: '3ロ', subUsages: [],
@@ -38,6 +38,23 @@ describe('inspectionCase', () => {
     expect(after.entries['FU-001'].result).toBe('nonCompliant');
     // 順序:カテゴリ順(火気使用設備は避難施設の後)
     expect(after.itemIds.indexOf('FU-001')).toBeGreaterThan(after.itemIds.indexOf('EV-001'));
+  });
+
+  it('stores item fields without affecting the judgement', () => {
+    let c = createCase(base, meta);
+    c = updateEntryField(c, 'EQ-001', 'abilityUnits', { '1': '3' });
+    c = updateEntryField(c, 'EQ-001', 'abilityUnits', { '1': '3', '2': '2' });
+    c = updateEntry(c, 'EQ-001', { result: 'compliant' });
+    expect(c.entries['EQ-001']).toMatchObject({ result: 'compliant', fields: { abilityUnits: { '1': '3', '2': '2' } } });
+    expect(c.status).toBe('inspecting');
+  });
+
+  it('keeps items with only field input on re-extraction', () => {
+    const withAlarm = { ...base, installedEquipment: ['autoFireAlarm' as const] };
+    let c = createCase(withAlarm, meta);
+    c = updateEntryField(c, 'EQ-004', 'receiverLocation', '1階 事務室');
+    const after = updateBuilding(c, base, meta); // 自火報なし・300㎡未満 → 抽出対象外
+    expect(after.itemIds).toContain('EQ-004');
   });
 
   it('parses inspectors and formats local date', () => {
