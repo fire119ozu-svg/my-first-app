@@ -2,17 +2,36 @@
  * xlsx ファイルの生成と保存(端末内で完結)。
  * ExcelJS は大きいため、出力時にだけ読み込む(PWAのプリキャッシュには含まれるのでオフラインでも動作)。
  */
+import { allPhotoIds } from '../logic/inspectionCase';
+import { listPhotosByCase } from '../storage/caseStore';
 import type { InspectionCase } from '../types/inspection';
-import { buildWorkbook } from './buildWorkbook';
+import { buildWorkbook, type ExportPhoto } from './buildWorkbook';
 import { exportFileName } from './format';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function createXlsxFile(c: InspectionCase): Promise<File> {
-  const { default: ExcelJS } = await import('exceljs');
-  const wb = buildWorkbook(ExcelJS, c);
+  const [{ default: ExcelJS }, photos] = await Promise.all([import('exceljs'), loadPhotos(c)]);
+  const wb = buildWorkbook(ExcelJS, c, { photos });
   const buffer = await wb.xlsx.writeBuffer();
   return new File([buffer], exportFileName(c), { type: XLSX_MIME });
+}
+
+/** 案件に添付された写真を読み込む(案件から外された写真は含めない) */
+async function loadPhotos(c: InspectionCase): Promise<ExportPhoto[]> {
+  const ids = new Set(allPhotoIds(c));
+  if (ids.size === 0) return [];
+  const records = (await listPhotosByCase(c.id)).filter((p) => ids.has(p.id));
+  return Promise.all(
+    records.map(async (p) => ({
+      id: p.id,
+      itemId: p.itemId,
+      data: await p.blob.arrayBuffer(),
+      width: p.width,
+      height: p.height,
+      createdAt: p.createdAt,
+    })),
+  );
 }
 
 /** 共有シート(「ファイルに保存」・AirDrop・メール等)が使えるか */

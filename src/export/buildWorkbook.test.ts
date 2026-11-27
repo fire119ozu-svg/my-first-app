@@ -1,8 +1,8 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
-import { createCase, setRemarks, updateEntry, updateEntryField } from '../logic/inspectionCase';
+import { addEntryPhoto, createCase, setRemarks, updateEntry, updateEntryField } from '../logic/inspectionCase';
 import type { BuildingInfo, InspectionCase } from '../types/inspection';
-import { buildWorkbook } from './buildWorkbook';
+import { buildWorkbook, type ExportPhoto } from './buildWorkbook';
 import { estimateLines, exportFileName, formatField, formatPerson } from './format';
 
 const building: BuildingInfo = {
@@ -23,8 +23,8 @@ function sampleCase(): InspectionCase {
   return setRemarks(c, '次回再確認');
 }
 
-async function roundTrip(c: InspectionCase) {
-  const wb = buildWorkbook(ExcelJS, c, new Date('2026-11-27T10:00:00+09:00'));
+async function roundTrip(c: InspectionCase, photos?: ExportPhoto[]) {
+  const wb = buildWorkbook(ExcelJS, c, { exportedAt: new Date('2026-11-27T10:00:00+09:00'), photos });
   const buf = await wb.xlsx.writeBuffer();
   const read = new ExcelJS.Workbook();
   await read.xlsx.load(buf);
@@ -113,6 +113,56 @@ describe('buildWorkbook', () => {
     expect(all).toContain('防火管理者選任届|済');
     expect(all).toContain('消防計画作成届|未');
     expect(all).toContain('統括防火管理者選任届|未入力');
+  });
+});
+
+// 最小のJPEG(1x1)
+const JPEG = Buffer.from(
+  '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=',
+  'base64',
+);
+
+describe('buildWorkbook with photos', () => {
+  const photo = (id: string, itemId: string, w = 1600, h = 1200): ExportPhoto => ({
+    id, itemId, data: JPEG, width: w, height: h, createdAt: '2026-11-27T01:23:00Z',
+  });
+
+  it('adds a photo sheet with embedded images and counts in the checklist', async () => {
+    let c = sampleCase();
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    c = addEntryPhoto(c, 'FU-001', 'p2');
+    c = addEntryPhoto(c, 'FU-001', 'p3');
+    c = addEntryPhoto(c, 'EQ-001', 'p4');
+    c = addEntryPhoto(c, 'EQ-001', 'gone'); // 本体が無い写真は出力しない
+    const wb = await roundTrip(c, [photo('p1', 'FU-001'), photo('p2', 'FU-001', 1200, 1600), photo('p3', 'FU-001'), photo('p4', 'EQ-001')]);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['チェックリスト', '指摘事項', '階別記録', '写真', '対象物情報']);
+
+    const ws = wb.getWorksheet('写真')!;
+    expect(ws.getImages()).toHaveLength(4);
+    const all = texts(ws).join('|');
+    // 項目の並び順(消火器 → 厨房設備)、判定・メモ付き
+    expect(all.indexOf('消火器(EQ-001)')).toBeLessThan(all.indexOf('厨房設備(FU-001)'));
+    expect(all).toContain('厨房設備(FU-001) 判定:否');
+    expect(all).toContain('グリスフィルターに油脂付着');
+    expect(all).toContain('写真3');
+
+    // 縦長写真は枠の高さに合わせて縮小(縦横比を維持)
+    const ext = ws.getImages().map((im) => (im.range as unknown as { ext: { width: number; height: number } }).ext);
+    expect(ext).toContainEqual({ width: 188, height: 250 });
+    expect(ext).toContainEqual({ width: 330, height: 248 });
+
+    const list = wb.getWorksheet('チェックリスト')!;
+    const fu = findRow(list, (v) => String(v[2] ?? '').includes('(FU-001)'))!;
+    expect(fu[6]).toBe('写真 3枚(「写真」シート)');
+    const ext1 = findRow(list, (v) => String(v[2] ?? '').includes('(EQ-001)'))!;
+    expect(String(ext1[6])).toMatch(/合計 9\.5単位\n写真 1枚/);
+    // 指摘事項シートにも枚数
+    expect(texts(wb.getWorksheet('指摘事項')!)).toContain('写真 3枚(「写真」シート)');
+  });
+
+  it('omits the photo sheet when no photos are attached', async () => {
+    const wb = await roundTrip(sampleCase(), []);
+    expect(wb.getWorksheet('写真')).toBeUndefined();
   });
 });
 

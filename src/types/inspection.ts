@@ -256,6 +256,8 @@ export interface CheckEntry {
   memo: string;
   /** 追加入力欄の値(ItemFieldDef.key → 値) */
   fields?: Record<string, ItemFieldValue>;
+  /** 添付写真のID(撮影・追加順)。画像本体は PhotoRecord として別に保存する */
+  photoIds?: string[];
   /** ISO 8601 */
   updatedAt: string;
 }
@@ -280,4 +282,22 @@ export interface InspectionCase {
   remarks: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * 添付写真(端末内のIndexedDBに案件とは別に保存)。
+ * 画像は長辺を縮小したJPEGで保持し、一覧表示用に縮小版も持つ。
+ */
+export interface PhotoRecord {
+  id: string;
+  caseId: string;
+  itemId: string;
+  /** 表示・Excel出力用(JPEG) */
+  blob: Blob;
+  /** 一覧表示用の縮小版(JPEG) */
+  thumb: Blob;
+  width: number;
+  height: number;
+  /** 追加日時(ISO 8601) */
+  createdAt: string;
 }

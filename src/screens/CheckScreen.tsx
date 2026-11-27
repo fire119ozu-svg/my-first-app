@@ -1,12 +1,23 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ExportSheet } from '../components/ExportSheet';
+import { PhotoStrip } from '../components/PhotoStrip';
 import { Header, HeaderLink } from '../components/Header';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { groupByCategory } from '../logic/extractChecklist';
 import { asPerFloor, asText, floorKeys, floorLabel, sumPerFloor } from '../logic/floors';
-import { caseProgress, setRemarks, setStatus, updateEntry, updateEntryField } from '../logic/inspectionCase';
+import {
+  addEntryPhoto,
+  caseProgress,
+  newId,
+  removeEntryPhoto,
+  setRemarks,
+  setStatus,
+  updateEntry,
+  updateEntryField,
+} from '../logic/inspectionCase';
+import { processImage } from '../photos/processImage';
 import { paths } from '../router';
-import { getCase, saveCase } from '../storage/caseStore';
+import { deletePhoto, getCase, saveCase, savePhoto } from '../storage/caseStore';
 import {
   CHECK_RESULT_LABELS,
   type CheckEntry,
@@ -19,6 +30,15 @@ import {
   type Severity,
 } from '../types/inspection';
 
+const NO_PHOTOS: string[] = [];
+
+function photoErrorMessage(e: unknown): string {
+  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+    return '端末の空き容量が不足しているため写真を保存できませんでした。';
+  }
+  return `写真を追加できませんでした(${e instanceof Error ? e.message : String(e)})`;
+}
+
 const SEVERITY_LABELS: Record<Severity, string> = { high: '重要', medium: '中', low: '軽' };
 const RESULTS: CheckResult[] = ['compliant', 'nonCompliant', 'notApplicable'];
 
@@ -30,6 +50,9 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   const [filter, setFilter] = useState<Filter>('all');
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [exporting, setExporting] = useState(false);
+  /** 項目ごとの処理中の写真枚数 */
+  const [pendingPhotos, setPendingPhotos] = useState<Record<string, number>>({});
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const current = useRef<InspectionCase | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
 
@@ -69,6 +92,40 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   const onField = useCallback(
     (itemId: string, key: string, value: ItemFieldValue) =>
       commit((c) => updateEntryField(c, itemId, key, value)),
+    [commit],
+  );
+
+  const onAddPhotos = useCallback(
+    async (itemId: string, files: File[]) => {
+      const caseId = current.current?.id;
+      if (!caseId) return;
+      setPhotoError(null);
+      const bump = (n: number) =>
+        setPendingPhotos((p) => ({ ...p, [itemId]: Math.max(0, (p[itemId] ?? 0) + n) }));
+      bump(files.length);
+      // 端末のメモリを圧迫しないよう1枚ずつ処理する
+      for (const file of files) {
+        try {
+          const img = await processImage(file);
+          const id = newId();
+          await savePhoto({ id, caseId, itemId, ...img, createdAt: new Date().toISOString() });
+          commit((c) => addEntryPhoto(c, itemId, id));
+        } catch (e) {
+          setPhotoError(photoErrorMessage(e));
+        } finally {
+          bump(-1);
+        }
+      }
+    },
+    [commit],
+  );
+
+  const onRemovePhoto = useCallback(
+    (itemId: string, photoId: string) => {
+      commit((c) => removeEntryPhoto(c, itemId, photoId));
+      // 案件側から外した後に本体を消す(失敗しても表示には影響しない)
+      void deletePhoto(photoId).catch(() => undefined);
+    },
     [commit],
   );
 
@@ -146,6 +203,11 @@ export function CheckScreen({ caseId }: { caseId: string }) {
             </button>
           </div>
         )}
+        {photoError && (
+          <p className="error-banner" role="alert" onClick={() => setPhotoError(null)}>
+            {photoError}
+          </p>
+        )}
         {saveState === 'error' && (
           <p className="error-banner">端末への保存に失敗しました。空き容量を確認してください。</p>
         )}
@@ -200,6 +262,9 @@ export function CheckScreen({ caseId }: { caseId: string }) {
                 onResult={onResult}
                 onMemo={onMemo}
                 onField={onField}
+                pendingPhotos={pendingPhotos[item.id] ?? 0}
+                onAddPhotos={onAddPhotos}
+                onRemovePhoto={onRemovePhoto}
               />
             ))}
           </section>
@@ -254,10 +319,24 @@ interface CardProps {
   onResult: (itemId: string, result: CheckResult | null) => void;
   onMemo: (itemId: string, memo: string) => void;
   onField: (itemId: string, key: string, value: ItemFieldValue) => void;
+  pendingPhotos: number;
+  onAddPhotos: (itemId: string, files: File[]) => void;
+  onRemovePhoto: (itemId: string, photoId: string) => void;
 }
 
 /** 1項目ぶんのカード。判定ボタンは再タップで未判定に戻せる。 */
-const CheckItemCard = memo(function CheckItemCard({ item, entry, floors, readOnly, onResult, onMemo, onField }: CardProps) {
+const CheckItemCard = memo(function CheckItemCard({
+  item,
+  entry,
+  floors,
+  readOnly,
+  onResult,
+  onMemo,
+  onField,
+  pendingPhotos,
+  onAddPhotos,
+  onRemovePhoto,
+}: CardProps) {
   const result = entry?.result ?? null;
   return (
     <article className={`check-card${result ? ` r-${result}` : ''}`}>
@@ -304,6 +383,14 @@ const CheckItemCard = memo(function CheckItemCard({ item, entry, floors, readOnl
           onChange={(v) => onField(item.id, def.key, v)}
         />
       ))}
+      <PhotoStrip
+        title={item.title}
+        photoIds={entry?.photoIds ?? NO_PHOTOS}
+        readOnly={readOnly}
+        pending={pendingPhotos}
+        onAdd={(files) => onAddPhotos(item.id, files)}
+        onRemove={(id) => onRemovePhoto(item.id, id)}
+      />
       <AutoTextarea
         className="memo"
         value={entry?.memo ?? ''}

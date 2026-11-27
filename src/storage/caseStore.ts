@@ -2,12 +2,15 @@
  * 検査案件の端末内保存(IndexedDB)。
  * データは端末のブラウザ内にのみ保存され、外部へは送信されない。
  */
-import type { InspectionCase } from '../types/inspection';
+import type { InspectionCase, PhotoRecord } from '../types/inspection';
 import { migrateCase } from './migrate';
 
 const DB_NAME = 'fire-inspection';
-const DB_VERSION = 1;
-const STORE = 'cases';
+/** v1: cases / v2: photos を追加 */
+const DB_VERSION = 2;
+const CASES = 'cases';
+const PHOTOS = 'photos';
+type StoreName = typeof CASES | typeof PHOTOS;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -17,9 +20,13 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(CASES)) {
+        const store = db.createObjectStore(CASES, { keyPath: 'id' });
         store.createIndex('updatedAt', 'updatedAt');
+      }
+      if (!db.objectStoreNames.contains(PHOTOS)) {
+        const store = db.createObjectStore(PHOTOS, { keyPath: 'id' });
+        store.createIndex('caseId', 'caseId');
       }
     };
     req.onsuccess = () => {
@@ -35,44 +42,83 @@ function openDb(): Promise<IDBDatabase> {
       dbPromise = null;
       reject(req.error);
     };
+    // 古い版を開いた別タブがある場合。閉じられれば続行される
+    req.onblocked = () => console.warn('IndexedDB upgrade blocked by another tab');
   });
   return dbPromise;
 }
 
-function run<T>(
+/**
+ * トランザクションを実行し、完了(ディスク反映)まで待って fn の戻り値を返す。
+ * fn が IDBRequest を返した場合はその結果を返す。
+ */
+function tx<T>(
+  stores: StoreName | StoreName[],
   mode: IDBTransactionMode,
-  fn: (store: IDBObjectStore) => IDBRequest<T>,
+  fn: (t: IDBTransaction) => IDBRequest<T> | void,
 ): Promise<T> {
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE, mode);
-        const req = fn(tx.objectStore(STORE));
-        // 書き込みはトランザクション完了(ディスク反映)まで待つ
-        tx.oncomplete = () => resolve(req.result);
-        tx.onerror = () => reject(tx.error ?? req.error);
-        tx.onabort = () => reject(tx.error ?? new Error('Transaction aborted'));
+        const t = db.transaction(stores, mode);
+        const req = fn(t);
+        t.oncomplete = () => resolve(req ? req.result : (undefined as T));
+        t.onerror = () => reject(t.error ?? req?.error);
+        t.onabort = () => reject(t.error ?? new Error('Transaction aborted'));
       }),
   );
 }
 
 /** 更新日時の新しい順 */
 export async function listCases(): Promise<InspectionCase[]> {
-  const all = (await run<InspectionCase[]>('readonly', (s) => s.getAll())).map(migrateCase);
+  const all = (await tx<InspectionCase[]>(CASES, 'readonly', (t) => t.objectStore(CASES).getAll())).map(migrateCase);
   return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function getCase(id: string): Promise<InspectionCase | undefined> {
-  const c = await run<InspectionCase | undefined>('readonly', (s) => s.get(id));
+  const c = await tx<InspectionCase | undefined>(CASES, 'readonly', (t) => t.objectStore(CASES).get(id));
   return c && migrateCase(c);
 }
 
 export async function saveCase(c: InspectionCase): Promise<void> {
-  await run('readwrite', (s) => s.put(c));
+  await tx(CASES, 'readwrite', (t) => t.objectStore(CASES).put(c));
 }
 
+/** 案件と、その案件の写真をまとめて削除する */
 export async function deleteCase(id: string): Promise<void> {
-  await run('readwrite', (s) => s.delete(id));
+  await tx([CASES, PHOTOS], 'readwrite', (t) => {
+    t.objectStore(CASES).delete(id);
+    const photos = t.objectStore(PHOTOS);
+    const cursor = photos.index('caseId').openKeyCursor(IDBKeyRange.only(id));
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c) return;
+      photos.delete(c.primaryKey);
+      c.continue();
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 写真
+// ---------------------------------------------------------------------------
+
+export async function savePhoto(p: PhotoRecord): Promise<void> {
+  await tx(PHOTOS, 'readwrite', (t) => t.objectStore(PHOTOS).put(p));
+}
+
+export function getPhoto(id: string): Promise<PhotoRecord | undefined> {
+  return tx<PhotoRecord | undefined>(PHOTOS, 'readonly', (t) => t.objectStore(PHOTOS).get(id));
+}
+
+export function listPhotosByCase(caseId: string): Promise<PhotoRecord[]> {
+  return tx<PhotoRecord[]>(PHOTOS, 'readonly', (t) =>
+    t.objectStore(PHOTOS).index('caseId').getAll(IDBKeyRange.only(caseId)),
+  );
+}
+
+export async function deletePhoto(id: string): Promise<void> {
+  await tx(PHOTOS, 'readwrite', (t) => t.objectStore(PHOTOS).delete(id));
 }
 
 /**

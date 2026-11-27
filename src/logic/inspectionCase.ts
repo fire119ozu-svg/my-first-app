@@ -59,7 +59,10 @@ function hasFieldInput(fields: CheckEntry['fields']): boolean {
 }
 
 function hasInput(e: CheckEntry | undefined): boolean {
-  return !!e && (e.result !== null || e.memo.trim() !== '' || hasFieldInput(e.fields));
+  return (
+    !!e &&
+    (e.result !== null || e.memo.trim() !== '' || hasFieldInput(e.fields) || (e.photoIds?.length ?? 0) > 0)
+  );
 }
 
 /**
@@ -93,7 +96,7 @@ function sortItemIds(ids: string[]): string[] {
 export function updateEntry(
   c: InspectionCase,
   itemId: string,
-  patch: Partial<Pick<CheckEntry, 'result' | 'memo' | 'fields'>>,
+  patch: Partial<Pick<CheckEntry, 'result' | 'memo' | 'fields' | 'photoIds'>>,
   now = new Date(),
 ): InspectionCase {
   const ts = now.toISOString();
@@ -117,6 +120,21 @@ export function updateEntryField(
 ): InspectionCase {
   const fields = { ...c.entries[itemId]?.fields, [key]: value };
   return updateEntry(c, itemId, { fields }, now);
+}
+
+export function addEntryPhoto(c: InspectionCase, itemId: string, photoId: string, now = new Date()): InspectionCase {
+  const ids = c.entries[itemId]?.photoIds ?? [];
+  return updateEntry(c, itemId, { photoIds: [...ids, photoId] }, now);
+}
+
+export function removeEntryPhoto(c: InspectionCase, itemId: string, photoId: string, now = new Date()): InspectionCase {
+  const ids = c.entries[itemId]?.photoIds ?? [];
+  return updateEntry(c, itemId, { photoIds: ids.filter((id) => id !== photoId) }, now);
+}
+
+/** 案件内の全写真ID(項目の並び順) */
+export function allPhotoIds(c: InspectionCase): string[] {
+  return c.itemIds.flatMap((id) => c.entries[id]?.photoIds ?? []);
 }
 
 export function setStatus(c: InspectionCase, status: CaseStatus, now = new Date()): InspectionCase {

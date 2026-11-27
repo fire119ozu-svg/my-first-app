@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { BuildingInfo } from '../types/inspection';
-import { caseProgress, createCase, parseInspectors, today, updateBuilding, updateEntry, updateEntryField } from './inspectionCase';
+import {
+  addEntryPhoto,
+  allPhotoIds,
+  caseProgress,
+  createCase,
+  parseInspectors,
+  removeEntryPhoto,
+  today,
+  updateBuilding,
+  updateEntry,
+  updateEntryField,
+} from './inspectionCase';
 
 const base: BuildingInfo = {
   name: '飲食店', address: '高知市', usage: '3ロ', subUsages: [],
@@ -55,6 +66,25 @@ describe('inspectionCase', () => {
     c = updateEntryField(c, 'EQ-004', 'receiverLocation', '1階 事務室');
     const after = updateBuilding(c, base, meta); // 自火報なし・300㎡未満 → 抽出対象外
     expect(after.itemIds).toContain('EQ-004');
+  });
+
+  it('adds and removes photos in order without touching the judgement', () => {
+    let c = createCase(base, meta);
+    c = updateEntry(c, 'FU-001', { result: 'nonCompliant' });
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    c = addEntryPhoto(c, 'FU-001', 'p2');
+    c = addEntryPhoto(c, 'FM-001', 'p3');
+    expect(c.entries['FU-001']).toMatchObject({ result: 'nonCompliant', photoIds: ['p1', 'p2'] });
+    expect(allPhotoIds(c)).toEqual(['p3', 'p1', 'p2']); // 項目の並び順
+    c = removeEntryPhoto(c, 'FU-001', 'p1');
+    expect(c.entries['FU-001'].photoIds).toEqual(['p2']);
+  });
+
+  it('keeps items with only photos on re-extraction', () => {
+    let c = createCase(base, meta);
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    const after = updateBuilding(c, { ...base, facilities: [] }, meta);
+    expect(after.itemIds).toContain('FU-001');
   });
 
   it('parses inspectors and formats local date', () => {
