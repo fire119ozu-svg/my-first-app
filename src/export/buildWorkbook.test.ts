@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
-import { addEntryPhoto, createCase, setRemarks, updateEntry, updateEntryField } from '../logic/inspectionCase';
+import { addEntryPhoto, createCase, setPhotoCaption, setRemarks, updateEntry, updateEntryField } from '../logic/inspectionCase';
 import type { BuildingInfo, InspectionCase } from '../types/inspection';
 import { buildWorkbook, type ExportPhoto } from './buildWorkbook';
 import { estimateLines, exportFileName, formatField, formatPerson } from './format';
@@ -134,6 +134,7 @@ describe('buildWorkbook with photos', () => {
     c = addEntryPhoto(c, 'FU-001', 'p3');
     c = addEntryPhoto(c, 'EQ-001', 'p4');
     c = addEntryPhoto(c, 'EQ-001', 'gone'); // 本体が無い写真は出力しない
+    c = setPhotoCaption(c, 'FU-001', 'p2', '1階 厨房 排気フード');
     const wb = await roundTrip(c, [photo('p1', 'FU-001'), photo('p2', 'FU-001', 1200, 1600), photo('p3', 'FU-001'), photo('p4', 'EQ-001')]);
     expect(wb.worksheets.map((w) => w.name)).toEqual(['チェックリスト', '指摘事項', '階別記録', '写真', '対象物情報']);
 
@@ -145,6 +146,17 @@ describe('buildWorkbook with photos', () => {
     expect(all).toContain('厨房設備(FU-001) 判定:否');
     expect(all).toContain('グリスフィルターに油脂付着');
     expect(all).toContain('写真3');
+    // コメントは画像の下に(太字のコメント+日時)
+    const capCell = (() => {
+      let found: ExcelJS.Cell | undefined;
+      ws.eachRow((row) => row.eachCell((cell) => {
+        const v = cell.value as { richText?: { text: string }[] } | null;
+        if (v?.richText?.[0]?.text === '写真2 1階 厨房 排気フード') found = cell;
+      }));
+      return found;
+    })();
+    expect(capCell).toBeDefined();
+    expect((capCell!.value as { richText: { text: string }[] }).richText[1].text).toMatch(/^\n2026\/11\/27/);
 
     // 縦長写真は枠の高さに合わせて縮小(縦横比を維持)
     const ext = ws.getImages().map((im) => (im.range as unknown as { ext: { width: number; height: number } }).ext);

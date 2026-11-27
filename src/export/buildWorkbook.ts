@@ -481,10 +481,28 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
           editAs: 'oneCell',
         });
         const cap = ws.getCell(r + 1, j + 1);
-        cap.value = `写真${i + j + 1} ${new Date(p.createdAt).toLocaleString('ja-JP')}`;
-        cap.font = { name: FONT, size: 9, color: { argb: 'FF6E6E73' } };
+        const comment = entry?.photoCaptions?.[p.id]?.trim() ?? '';
+        const date = new Date(p.createdAt).toLocaleString('ja-JP');
+        // コメント(場所など)を主に、日時は補足として表示
+        cap.value = comment
+          ? {
+              richText: [
+                { text: `写真${i + j + 1} ${comment}`, font: { name: FONT, size: 10, bold: true } },
+                { text: `\n${date}`, font: { name: FONT, size: 8, color: { argb: 'FF6E6E73' } } },
+              ],
+            }
+          : `写真${i + j + 1} ${date}`;
+        if (!comment) cap.font = { name: FONT, size: 9, color: { argb: 'FF6E6E73' } };
+        cap.alignment = { vertical: 'top', wrapText: true };
       });
-      ws.getRow(r + 1).height = 16;
+      const captionLines = Math.max(
+        1,
+        ...pair.map((p, j) => {
+          const comment = entry?.photoCaptions?.[p.id]?.trim() ?? '';
+          return comment ? estimateLines(`写真${i + j + 1} ${comment}`, PHOTO_COL_WIDTH) + 1 : 1;
+        }),
+      );
+      ws.getRow(r + 1).height = captionLines * LINE_HEIGHT + 4;
       r += 2;
     }
     r++;

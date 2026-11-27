@@ -10,6 +10,7 @@ import {
   caseProgress,
   newId,
   removeEntryPhoto,
+  setPhotoCaption,
   setRemarks,
   setStatus,
   updateEntry,
@@ -31,6 +32,7 @@ import {
 } from '../types/inspection';
 
 const NO_PHOTOS: string[] = [];
+const NO_CAPTIONS: Record<string, string> = {};
 
 function photoErrorMessage(e: unknown): string {
   if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -126,6 +128,12 @@ export function CheckScreen({ caseId }: { caseId: string }) {
       // 案件側から外した後に本体を消す(失敗しても表示には影響しない)
       void deletePhoto(photoId).catch(() => undefined);
     },
+    [commit],
+  );
+
+  const onPhotoCaption = useCallback(
+    (itemId: string, photoId: string, caption: string) =>
+      commit((c) => setPhotoCaption(c, itemId, photoId, caption)),
     [commit],
   );
 
@@ -265,6 +273,7 @@ export function CheckScreen({ caseId }: { caseId: string }) {
                 pendingPhotos={pendingPhotos[item.id] ?? 0}
                 onAddPhotos={onAddPhotos}
                 onRemovePhoto={onRemovePhoto}
+                onPhotoCaption={onPhotoCaption}
               />
             ))}
           </section>
@@ -322,6 +331,7 @@ interface CardProps {
   pendingPhotos: number;
   onAddPhotos: (itemId: string, files: File[]) => void;
   onRemovePhoto: (itemId: string, photoId: string) => void;
+  onPhotoCaption: (itemId: string, photoId: string, caption: string) => void;
 }
 
 /** 1項目ぶんのカード。判定ボタンは再タップで未判定に戻せる。 */
@@ -336,6 +346,7 @@ const CheckItemCard = memo(function CheckItemCard({
   pendingPhotos,
   onAddPhotos,
   onRemovePhoto,
+  onPhotoCaption,
 }: CardProps) {
   const result = entry?.result ?? null;
   return (
@@ -386,10 +397,12 @@ const CheckItemCard = memo(function CheckItemCard({
       <PhotoStrip
         title={item.title}
         photoIds={entry?.photoIds ?? NO_PHOTOS}
+        captions={entry?.photoCaptions ?? NO_CAPTIONS}
         readOnly={readOnly}
         pending={pendingPhotos}
         onAdd={(files) => onAddPhotos(item.id, files)}
         onRemove={(id) => onRemovePhoto(item.id, id)}
+        onCaption={(id, caption) => onPhotoCaption(item.id, id, caption)}
       />
       <AutoTextarea
         className="memo"

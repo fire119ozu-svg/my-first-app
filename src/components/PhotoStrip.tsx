@@ -29,12 +29,20 @@ function usePhotoUrl(id: string, kind: 'thumb' | 'blob'): { url: string | null; 
   return state;
 }
 
-function Thumb({ id, index, onOpen }: { id: string; index: number; onOpen: () => void }) {
+function Thumb({ id, index, caption, onOpen }: { id: string; index: number; caption: string; onOpen: () => void }) {
   const { url, missing } = usePhotoUrl(id, 'thumb');
   return (
-    <button type="button" className="photo-thumb" onClick={onOpen} aria-label={`写真${index + 1}を拡大`}>
-      {url ? <img src={url} alt="" /> : <span className="photo-missing">{missing ? '読込不可' : ''}</span>}
-    </button>
+    <figure className="photo-item">
+      <button
+        type="button"
+        className="photo-thumb"
+        onClick={onOpen}
+        aria-label={`写真${index + 1}を拡大${caption ? `(${caption})` : ''}`}
+      >
+        {url ? <img src={url} alt="" /> : <span className="photo-missing">{missing ? '読込不可' : ''}</span>}
+      </button>
+      {caption.trim() && <figcaption className="photo-caption">{caption}</figcaption>}
+    </figure>
   );
 }
 
@@ -42,13 +50,16 @@ interface StripProps {
   title: string;
   photoIds: string[];
   readOnly: boolean;
+  /** 写真ID → コメント */
+  captions: Record<string, string>;
   /** 処理中の枚数 */
   pending: number;
   onAdd: (files: File[]) => void;
   onRemove: (photoId: string) => void;
+  onCaption: (photoId: string, caption: string) => void;
 }
 
-export function PhotoStrip({ title, photoIds, readOnly, pending, onAdd, onRemove }: StripProps) {
+export function PhotoStrip({ title, photoIds, captions, readOnly, pending, onAdd, onRemove, onCaption }: StripProps) {
   const input = useRef<HTMLInputElement>(null);
   const [viewing, setViewing] = useState<number | null>(null);
 
@@ -57,7 +68,7 @@ export function PhotoStrip({ title, photoIds, readOnly, pending, onAdd, onRemove
   return (
     <div className="photo-strip">
       {photoIds.map((id, i) => (
-        <Thumb key={id} id={id} index={i} onOpen={() => setViewing(i)} />
+        <Thumb key={id} id={id} index={i} caption={captions[id] ?? ''} onOpen={() => setViewing(i)} />
       ))}
       {Array.from({ length: pending }, (_, i) => (
         <span key={`p${i}`} className="photo-thumb pending" aria-label="写真を処理中">
@@ -95,7 +106,9 @@ export function PhotoStrip({ title, photoIds, readOnly, pending, onAdd, onRemove
           title={title}
           photoIds={photoIds}
           index={viewing}
+          captions={captions}
           readOnly={readOnly}
+          onCaption={onCaption}
           onIndex={setViewing}
           onClose={() => setViewing(null)}
           onRemove={(id) => {
@@ -113,12 +126,14 @@ function PhotoViewer(props: {
   title: string;
   photoIds: string[];
   index: number;
+  captions: Record<string, string>;
   readOnly: boolean;
+  onCaption: (photoId: string, caption: string) => void;
   onIndex: (i: number) => void;
   onClose: () => void;
   onRemove: (id: string) => void;
 }) {
-  const { title, photoIds, index, readOnly, onIndex, onClose, onRemove } = props;
+  const { title, photoIds, index, captions, readOnly, onCaption, onIndex, onClose, onRemove } = props;
   const id = photoIds[index];
   const { url, photo } = usePhotoUrl(id, 'blob');
   const count = photoIds.length;
@@ -145,6 +160,29 @@ function PhotoViewer(props: {
       </div>
       <div className="viewer-image" onClick={onClose}>
         {url && <img src={url} alt={`${title} 写真${index + 1}`} onClick={(e) => e.stopPropagation()} />}
+      </div>
+      <div className="viewer-caption">
+        {readOnly ? (
+          captions[id]?.trim() && <p>{captions[id]}</p>
+        ) : (
+          <textarea
+            rows={2}
+            className="viewer-caption-input"
+            value={captions[id] ?? ''}
+            maxLength={200}
+            placeholder="コメント(例:2階 東側廊下)"
+            aria-label={`写真${index + 1}のコメント`}
+            enterKeyHint="done"
+            onChange={(e) => onCaption(id, e.target.value.replace(/\n/g, ' '))}
+            onKeyDown={(e) => {
+              // 改行の代わりに入力を確定してキーボードを閉じる
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+          />
+        )}
       </div>
       <div className="viewer-bar bottom">
         <button type="button" className="viewer-btn" disabled={index === 0} onClick={() => onIndex(index - 1)}>

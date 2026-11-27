@@ -7,6 +7,7 @@ import {
   createCase,
   parseInspectors,
   removeEntryPhoto,
+  setPhotoCaption,
   today,
   updateBuilding,
   updateEntry,
@@ -77,6 +78,20 @@ describe('inspectionCase', () => {
     expect(c.entries['FU-001']).toMatchObject({ result: 'nonCompliant', photoIds: ['p1', 'p2'] });
     expect(allPhotoIds(c)).toEqual(['p3', 'p1', 'p2']); // 項目の並び順
     c = removeEntryPhoto(c, 'FU-001', 'p1');
+    expect(c.entries['FU-001'].photoIds).toEqual(['p2']);
+  });
+
+  it('sets, clears and removes photo captions with the photo', () => {
+    let c = createCase(base, meta);
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    c = addEntryPhoto(c, 'FU-001', 'p2');
+    c = setPhotoCaption(c, 'FU-001', 'p1', '1階 厨房 排気フード');
+    c = setPhotoCaption(c, 'FU-001', 'p2', '2階');
+    expect(c.entries['FU-001'].photoCaptions).toEqual({ p1: '1階 厨房 排気フード', p2: '2階' });
+    c = setPhotoCaption(c, 'FU-001', 'p2', '');
+    expect(c.entries['FU-001'].photoCaptions).toEqual({ p1: '1階 厨房 排気フード' });
+    c = removeEntryPhoto(c, 'FU-001', 'p1');
+    expect(c.entries['FU-001'].photoCaptions).toEqual({});
     expect(c.entries['FU-001'].photoIds).toEqual(['p2']);
   });
 

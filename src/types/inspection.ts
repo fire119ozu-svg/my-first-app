@@ -258,6 +258,8 @@ export interface CheckEntry {
   fields?: Record<string, ItemFieldValue>;
   /** 添付写真のID(撮影・追加順)。画像本体は PhotoRecord として別に保存する */
   photoIds?: string[];
+  /** 写真ごとのコメント(撮影場所など)。写真ID → コメント */
+  photoCaptions?: Record<string, string>;
   /** ISO 8601 */
   updatedAt: string;
 }
