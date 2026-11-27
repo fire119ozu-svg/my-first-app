@@ -1,0 +1,57 @@
+:root {
+  --color-primary: #b71c1c;
+  --color-bg: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-text: #1c1c1e;
+  --color-muted: #6e6e73;
+  --color-border: #d1d1d6;
+  --tap-min: 44px; /* iOS HIG の最小タップ領域 */
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  /* 入力欄フォーカス時のSafariの自動ズームを防ぐため16px以上 */
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  background: var(--color-primary);
+  color: #fff;
+}
+.app-header h1 { margin: 0; font-size: 1.1rem; }
+
+.app-main {
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px);
+}
+
+.muted { color: var(--color-muted); }
+
+.category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.category-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.category-list li:last-child { border-bottom: none; }
+.count { color: var(--color-muted); }
