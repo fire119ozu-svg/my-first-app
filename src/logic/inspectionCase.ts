@@ -96,7 +96,7 @@ function sortItemIds(ids: string[]): string[] {
 export function updateEntry(
   c: InspectionCase,
   itemId: string,
-  patch: Partial<Pick<CheckEntry, 'result' | 'memo' | 'fields' | 'photoIds'>>,
+  patch: Partial<Pick<CheckEntry, 'result' | 'memo' | 'fields' | 'photoIds' | 'photoCaptions'>>,
   now = new Date(),
 ): InspectionCase {
   const ts = now.toISOString();
@@ -128,8 +128,25 @@ export function addEntryPhoto(c: InspectionCase, itemId: string, photoId: string
 }
 
 export function removeEntryPhoto(c: InspectionCase, itemId: string, photoId: string, now = new Date()): InspectionCase {
-  const ids = c.entries[itemId]?.photoIds ?? [];
-  return updateEntry(c, itemId, { photoIds: ids.filter((id) => id !== photoId) }, now);
+  const entry = c.entries[itemId];
+  const ids = entry?.photoIds ?? [];
+  // 写真と一緒にコメントも消す
+  const { [photoId]: _removed, ...captions } = entry?.photoCaptions ?? {};
+  void _removed;
+  return updateEntry(c, itemId, { photoIds: ids.filter((id) => id !== photoId), photoCaptions: captions }, now);
+}
+
+/** 写真のコメント(撮影場所など)を設定する。空文字は削除扱い */
+export function setPhotoCaption(
+  c: InspectionCase,
+  itemId: string,
+  photoId: string,
+  caption: string,
+  now = new Date(),
+): InspectionCase {
+  const { [photoId]: _old, ...rest } = c.entries[itemId]?.photoCaptions ?? {};
+  void _old;
+  return updateEntry(c, itemId, { photoCaptions: caption ? { ...rest, [photoId]: caption } : rest }, now);
 }
 
 /** 案件内の全写真ID(項目の並び順) */
