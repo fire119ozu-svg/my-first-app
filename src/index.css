@@ -637,3 +637,4 @@ fieldset.item-field > legend + * { clear: both; }
   appearance: none;
 }
 .person-field input:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+.person-hint { margin: -2px 0 4px; }

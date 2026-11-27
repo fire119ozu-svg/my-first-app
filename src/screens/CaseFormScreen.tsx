@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BuildingForm } from '../components/BuildingForm';
-import { Field, Section, TextInput } from '../components/controls';
+import { Field, PersonInput, Section, TextInput } from '../components/controls';
 import { Header, HeaderLink } from '../components/Header';
 import { emptyBuildingForm, toBuildingForm, validateBuildingForm, type BuildingFormState } from '../logic/buildingForm';
 import { extractChecklistItems } from '../logic/extractChecklist';
@@ -174,6 +174,14 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
             )}
           </Field>
           <TextInput label="検査員" value={draft.meta.inspectors} onChange={(v) => setMeta({ inspectors: v })} placeholder="複数は「、」で区切る" />
+          {/* 対象物情報の立会者と同じ値を編集する(どちらで入力しても両方に反映) */}
+          <PersonInput
+            label="立会者"
+            titlePlaceholder="例:防火管理者"
+            hint="対象物情報の立会者と連動"
+            value={draft.form.witness}
+            onChange={(witness) => setDraft({ ...draft, form: { ...draft.form, witness } })}
+          />
         </Section>
 
         <BuildingForm

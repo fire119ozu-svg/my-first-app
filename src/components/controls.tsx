@@ -166,11 +166,13 @@ export function PersonInput(props: {
   value: { title: string; name: string };
   onChange: (v: { title: string; name: string }) => void;
   titlePlaceholder?: string;
+  hint?: string;
 }) {
   const id = useId();
   return (
     <fieldset className="field person-field">
       <legend className="field-label">{props.label}</legend>
+      {props.hint && <p className="field-hint person-hint">{props.hint}</p>}
       <div className="person-row">
         <div>
           <label htmlFor={`${id}-title`} className="sub-label">役職</label>

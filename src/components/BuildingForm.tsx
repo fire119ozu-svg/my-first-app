@@ -26,7 +26,7 @@ export function BuildingForm({ form, errors, onChange }: Props) {
         <TextInput label="名称" required value={form.name} error={errors.name} onChange={(v) => set('name', v)} placeholder="例:○○ビル" />
         <TextInput label="所在地" value={form.address} onChange={(v) => set('address', v)} placeholder="例:高知市本町○丁目" />
         <PersonInput label="代表者" titlePlaceholder="例:代表取締役" value={form.representative} onChange={(v) => set('representative', v)} />
-        <PersonInput label="立会者" titlePlaceholder="例:防火管理者" value={form.witness} onChange={(v) => set('witness', v)} />
+        <PersonInput label="立会者" titlePlaceholder="例:防火管理者" hint="検査情報の立会者と連動" value={form.witness} onChange={(v) => set('witness', v)} />
         <Field label="用途(令別表第一)" required error={errors.usage}>
           {(id) => (
             <select
