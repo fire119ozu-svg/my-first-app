@@ -396,6 +396,23 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
       or(floorsAbove(7), and(floorsAbove(5), area(6000)), and(usage('16の2'), area(1000))),
     ),
     severity: 'medium',
+    fields: [
+      { key: 'inletLocation', kind: 'text', label: '送水口の場所', placeholder: '例:建物正面 北側道路沿い' },
+    ],
+  },
+  {
+    id: 'EQ-015',
+    category: 'equipment',
+    title: '連結散水設備',
+    checkPoint:
+      '送水口の表示・障害物・キャップの有無。送水区域・選択弁の系統図が掲示されているか。散水ヘッド周囲の散水障害がないか。',
+    legalBasis: [law('消防法施行令', '第28条の2'), law('消防法施行規則', '第30条の2〜第30条の3')],
+    condition: requiredOrInstalled('connectedSprinkler', and(usage('16の2'), area(700))),
+    severity: 'medium',
+    note: '設置義務は地階の床面積の合計700㎡以上で判定(地下街は延べ700㎡以上)。地階の床面積は入力項目にないため、設置済みの場合に抽出する。',
+    fields: [
+      { key: 'inletLocation', kind: 'text', label: '送水口の場所', placeholder: '例:建物東側 駐車場入口横' },
+    ],
   },
   {
     id: 'EQ-011',

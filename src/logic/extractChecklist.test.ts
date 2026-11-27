@@ -102,6 +102,15 @@ describe('extractChecklistItems', () => {
     expect(r).toContain('FR-001');
   });
 
+  it('connected sprinkler is extracted when installed and placed after standpipe', () => {
+    const r = ids(
+      building({ usage: '15', totalFloorArea: 8000, floorsAbove: 7, floorsBelow: 1, installedEquipment: ['connectedSprinkler'] }),
+    );
+    expect(r).toContain('EQ-015');
+    expect(r.indexOf('EQ-015')).toBe(r.indexOf('EQ-010') + 1);
+    expect(ids(building({ usage: '15', totalFloorArea: 8000, floorsBelow: 1 }))).not.toContain('EQ-015');
+  });
+
   it('returns items in category order', () => {
     const items = extractChecklistItems(building({ usage: '4', totalFloorArea: 5000, capacity: 500 }));
     const cats = items.map((i) => i.category);
