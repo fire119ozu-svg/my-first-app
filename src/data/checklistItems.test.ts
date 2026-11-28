@@ -24,4 +24,11 @@ describe('checklist master', () => {
     expect(ids('19')).not.toContain('NT-001');
     expect(ids('20')).not.toContain('NT-001');
   });
+
+  it('extracts 避難口の施錠管理 only for buildings with guide lights installed', () => {
+    const ids = (installed: boolean) =>
+      extractChecklistItems(makeBuilding({ usage: '15', installedEquipment: installed ? ['guideLight'] : [] })).map((i) => i.id);
+    expect(ids(false)).not.toContain('EV-003');
+    expect(ids(true)).toContain('EV-003');
+  });
 });
