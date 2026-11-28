@@ -108,4 +108,29 @@ describe('migrateCase', () => {
     expect(migrateCase(old).buildings[0].openingRecords).toEqual([]);
     expect(migrateCase(legacyCase()).buildings[0].openingRecords).toEqual([]);
   });
+  it('moves a direction written in the opening location into the direction field', () => {
+    const c = createCase(makeSite(), [makeBuilding()], { inspectionDate: '2026-11-27', inspectors: [] });
+    const opening = (location: string) => ({ id: location, location, kind: 'full', width: 100, height: 100, count: 1 });
+    const old = {
+      ...c,
+      buildings: [
+        {
+          ...c.buildings[0],
+          openingRecords: [
+            { id: 'r1', floor: '1', memo: '', openings: [opening('東面'), opening('北西 事務室'), opening('階段横'), opening('東側通路')] },
+          ],
+        },
+      ],
+    } as unknown as InspectionCase;
+    const openings = migrateCase(old).buildings[0].openingRecords[0].openings;
+    expect(openings.map((o) => [o.direction, o.location])).toEqual([
+      ['東', ''],
+      ['北西', '事務室'],
+      ['', '階段横'],
+      ['', '東側通路'],
+    ]);
+    // 変換済みの案件はそのまま
+    const migrated = migrateCase(old);
+    expect(migrateCase(migrated)).toBe(migrated);
+  });
 });

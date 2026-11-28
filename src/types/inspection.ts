@@ -306,10 +306,15 @@ export type ItemFieldValue = string | Record<FloorKey, string>;
  */
 export type OpeningKind = 'sliding' | 'full';
 
+/** 開口部の方角 */
+export type OpeningDirection = '東' | '西' | '南' | '北' | '北東' | '北西' | '南東' | '南西';
+
 /** 有効開口部(同じ寸法のものをまとめて箇所数で記録) */
 export interface WindowOpening {
   id: string;
-  /** 場所(例:東面) */
+  /** 方角(未選択は空文字) */
+  direction: OpeningDirection | '';
+  /** 場所(自由入力。例:事務室、階段横) */
   location: string;
   kind: OpeningKind;
   /** 幅(cm、建具の外形) */

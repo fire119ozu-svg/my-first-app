@@ -14,12 +14,14 @@ import {
   isEffectiveOpening,
   isLargeOpening,
   judgeRecordForm,
+  OPENING_DIRECTIONS,
   OPENING_KINDS,
+  openingPlace,
   type OpeningForm,
   type OpeningRecordForm,
 } from '../logic/openings';
 import { parseNumber } from '../logic/number';
-import type { FloorKey, OpeningKind } from '../types/inspection';
+import type { FloorKey, OpeningDirection, OpeningKind } from '../types/inspection';
 
 /** 開口部1つの有効寸法と扱い(例:有効 90×130cm・大型開口部) */
 function openingNote(o: OpeningForm): string | null {
@@ -44,7 +46,7 @@ function OpeningRow(props: {
   const { index, value: o, errors, removable, onChange, onRemove } = props;
   const id = useId();
   const err = (k: string) => errors[`opening:${o.id}:${k}`];
-  const label = o.location.trim() || `開口部${index + 1}`;
+  const label = openingPlace(o) || `開口部${index + 1}`;
   const num = (k: 'width' | 'height' | 'count', title: string, unit: string, placeholder?: string) => (
     <div className={err(k) ? 'has-error' : ''}>
       <label className="sub-label" htmlFor={`${id}-${k}`}>
@@ -67,11 +69,22 @@ function OpeningRow(props: {
   );
   return (
     <div className="opening-row">
-      <div className="tenant-head">
+      <div className="opening-place">
+        <select
+          aria-label={`開口部${index + 1}の方角`}
+          value={o.direction}
+          onChange={(e) => onChange({ ...o, direction: e.target.value as OpeningDirection | '' })}
+        >
+          <option value="">方角</option>
+          {OPENING_DIRECTIONS.map((d) => (
+            <option key={d} value={d}>
+              {d}面
+            </option>
+          ))}
+        </select>
         <input
           type="text"
-          className="tenant-name"
-          placeholder={`開口部${index + 1}の場所(例:東面)`}
+          placeholder="場所(例:事務室)"
           aria-label={`開口部${index + 1}の場所`}
           value={o.location}
           onChange={(e) => onChange({ ...o, location: e.target.value })}

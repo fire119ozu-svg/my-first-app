@@ -1068,3 +1068,5 @@ fieldset.item-field > legend + * { clear: both; }
 .opening-result.normal { color: var(--color-ok); }
 .opening-result.windowless { color: var(--color-ng); background: #fff8f8; }
 .opening-note { margin: 4px 0 0; color: var(--color-muted); font-size: 0.8rem; }
+.opening-place { display: grid; grid-template-columns: 7.5em 1fr auto; gap: 8px; margin-bottom: 6px; }
+.opening-place > * { min-width: 0; }

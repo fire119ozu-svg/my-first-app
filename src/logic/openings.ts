@@ -9,7 +9,7 @@
  * 開口部が要件(床面から下端1.2m以内・空地に面する・格子等がない等)を満たすかは査察員が判断し、
  * 要件を満たすものだけを入力する前提。引き違い窓は開く部分(幅の1/2)で計算する。
  */
-import type { FloorKey, OpeningFloorRecord, OpeningKind, WindowOpening } from '../types/inspection';
+import type { FloorKey, OpeningDirection, OpeningFloorRecord, OpeningKind, WindowOpening } from '../types/inspection';
 import { newId } from './inspectionCase';
 import { parseNumber } from './number';
 
@@ -17,6 +17,13 @@ export const OPENING_KINDS: { value: OpeningKind; label: string; hint: string }[
   { value: 'sliding', label: '引き違い(幅1/2)', hint: '開く部分(幅の1/2)で計算' },
   { value: 'full', label: '全面', hint: '開き戸・開き窓、容易に破壊できるガラスのはめ殺し窓など' },
 ];
+
+export const OPENING_DIRECTIONS: OpeningDirection[] = ['東', '西', '南', '北', '北東', '北西', '南東', '南西'];
+
+/** 方角と場所をまとめた表示(例:東面 事務室)。どちらも空なら空文字 */
+export function openingPlace(o: Pick<WindowOpening, 'direction' | 'location'>): string {
+  return [o.direction ? `${o.direction}面` : '', o.location.trim()].filter(Boolean).join(' ');
+}
 
 export const openingKindLabel = (k: OpeningKind) => OPENING_KINDS.find((x) => x.value === k)?.label ?? k;
 
@@ -111,7 +118,7 @@ export type OpeningRecordForm = Omit<OpeningFloorRecord, 'floor' | 'floorArea' |
 };
 
 export function emptyOpening(kind: OpeningKind = 'sliding'): OpeningForm {
-  return { id: newId(), location: '', kind, width: '', height: '', count: '' };
+  return { id: newId(), direction: '', location: '', kind, width: '', height: '', count: '' };
 }
 
 export function emptyOpeningRecord(floor: FloorKey | '' = ''): OpeningRecordForm {
@@ -126,7 +133,7 @@ export function toOpeningRecordForms(records: OpeningFloorRecord[]): OpeningReco
   }));
 }
 
-const openingHasInput = (o: OpeningForm) => !!(o.location.trim() || o.width.trim() || o.height.trim() || o.count.trim());
+const openingHasInput = (o: OpeningForm) => !!(o.direction || o.location.trim() || o.width.trim() || o.height.trim() || o.count.trim());
 const recordHasInput = (r: OpeningRecordForm) =>
   !!(r.floor || r.floorArea.trim() || r.memo.trim() || r.openings.some(openingHasInput));
 
@@ -188,7 +195,7 @@ export function validateOpeningRecords(
       if (height === null) errors[`opening:${o.id}:height`] = '高さを数値(cm)で入力してください';
       if (count === null) errors[`opening:${o.id}:count`] = '箇所数を1以上の整数で入力してください';
       if (width !== null && height !== null && count !== null) {
-        openings.push({ id: o.id, location: o.location.trim(), kind: o.kind, width, height, count });
+        openings.push({ id: o.id, direction: o.direction, location: o.location.trim(), kind: o.kind, width, height, count });
       }
     }
     records.push({

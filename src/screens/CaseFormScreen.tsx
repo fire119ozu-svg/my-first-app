@@ -120,6 +120,15 @@ function fromLegacyDraft(raw: string): Draft {
   };
 }
 
+/** 下書きの棟を現在の形式に(有効開口部の方角が無かった頃の下書きは方角を空欄に) */
+function fromDraftBuilding(b: BuildingFormState): BuildingFormState {
+  const f = { ...emptyBuildingForm(b.id), ...b };
+  return {
+    ...f,
+    openingRecords: f.openingRecords.map((r) => ({ ...r, openings: r.openings.map((o) => ({ ...o, direction: o.direction ?? '' })) })),
+  };
+}
+
 function loadDraft(): Draft {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
@@ -129,7 +138,7 @@ function loadDraft(): Draft {
       return {
         caseId: d.caseId ?? e.caseId,
         site: { ...e.site, ...d.site },
-        buildings: d.buildings?.length ? d.buildings.map((b) => ({ ...emptyBuildingForm(b.id), ...b })) : e.buildings,
+        buildings: d.buildings?.length ? d.buildings.map(fromDraftBuilding) : e.buildings,
         meta: { ...e.meta, ...d.meta },
       };
     }

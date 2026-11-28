@@ -3,6 +3,7 @@ import {
   emptyOpening,
   emptyOpeningRecord,
   formatJudgement,
+  openingPlace,
   isLargeOpening,
   judgeOpenings,
   judgeRecordForm,
@@ -55,6 +56,13 @@ describe('judgeOpenings(無窓階の判定)', () => {
     expect(isLargeOpening({ kind: 'full', width: 99, height: 119 })).toBe(false);
   });
 
+  it('方角と場所をまとめて表示する', () => {
+    expect(openingPlace({ direction: '北東', location: ' 階段横 ' })).toBe('北東面 階段横');
+    expect(openingPlace({ direction: '', location: '事務室' })).toBe('事務室');
+    expect(openingPlace({ direction: '南', location: '' })).toBe('南面');
+    expect(openingPlace({ direction: '', location: '' })).toBe('');
+  });
+
   it('床面積が未入力なら判定しない', () => {
     const j = judgeOpenings('1', undefined, [big]);
     expect(j.result).toBeNull();
@@ -84,7 +92,7 @@ describe('入力フォーム', () => {
   it('保存用に変換する(空の階・開口部は除き、階の順に並べる)', () => {
     const { records, errors } = validateOpeningRecords(
       [
-        recordForm({ floor: '3', floorArea: '200', memo: ' 東面道路 ', openings: [{ ...emptyOpening(), location: '東面', width: '180', height: '120', count: '2' }, emptyOpening()] }),
+        recordForm({ floor: '3', floorArea: '200', memo: ' 東面道路 ', openings: [{ ...emptyOpening(), direction: '東', location: ' 事務室 ', width: '180', height: '120', count: '2' }, emptyOpening()] }),
         recordForm({ floor: '1', openings: [{ ...emptyOpening(), width: '100', height: '100' }] }),
         recordForm({ floor: '' }),
       ].map((r, i) => (i === 2 ? { ...r, floor: '' as const } : r)),
@@ -95,7 +103,7 @@ describe('入力フォーム', () => {
     expect(records[1]).toMatchObject({
       floorArea: 200,
       memo: '東面道路',
-      openings: [{ location: '東面', kind: 'sliding', width: 180, height: 120, count: 2 }],
+      openings: [{ direction: '東', location: '事務室', kind: 'sliding', width: 180, height: 120, count: 2 }],
     });
     expect(records[0]).not.toHaveProperty('floorArea');
     expect(records[0].openings[0].count).toBe(1);
