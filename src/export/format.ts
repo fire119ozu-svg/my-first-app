@@ -105,7 +105,7 @@ export function notificationRows(b: BuildingInfo): [string, string][] {
 
 /** ファイル名に使えない文字を除去 */
 export function exportFileName(c: InspectionCase): string {
-  const name = c.building.name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) || '案件';
+  const name = c.site.name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) || '案件';
   return `立入検査_${name}_${c.inspectionDate.replace(/-/g, '')}.xlsx`;
 }
 

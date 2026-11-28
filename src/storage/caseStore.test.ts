@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../logic/inspectionCase';
-import type { BuildingInfo } from '../types/inspection';
+import { makeBuilding, makeSite } from '../test/fixtures';
 import {
   deleteCase,
   deletePhoto,
@@ -19,29 +19,25 @@ import {
 } from './caseStore';
 import type { PhotoRecord } from '../types/inspection';
 
-const building: BuildingInfo = {
-  name: 'A', address: '', usage: '15', subUsages: [], totalFloorArea: 100, floorsAbove: 1,
-  floorsBelow: 0, capacity: 10, isHighRise: false, hasWindowlessFloor: false,
-  isSingleStaircase: false, hasMultipleOwners: false, installedEquipment: [], facilities: [], notifications: {},
-};
+const building = makeBuilding({ totalFloorArea: 100, capacity: 10 });
 const meta = { inspectionDate: '2026-11-27', inspectors: [] };
 
 describe('caseStore', () => {
   it('saves, lists (newest first), loads and deletes', async () => {
-    const a = createCase({ ...building, name: 'A' }, meta, new Date('2026-11-01T00:00:00Z'));
-    const b = createCase({ ...building, name: 'B' }, meta, new Date('2026-11-02T00:00:00Z'));
+    const a = createCase(makeSite({ name: 'A' }), [building], meta, new Date('2026-11-01T00:00:00Z'));
+    const b = createCase(makeSite({ name: 'B' }), [building], meta, new Date('2026-11-02T00:00:00Z'));
     await saveCase(a);
     await saveCase(b);
-    expect((await listCases()).map((c) => c.building.name)).toEqual(['B', 'A']);
-    expect((await getCase(a.id))?.building.name).toBe('A');
+    expect((await listCases()).map((c) => c.site.name)).toEqual(['B', 'A']);
+    expect((await getCase(a.id))?.site.name).toBe('A');
     await deleteCase(a.id);
     expect(await getCase(a.id)).toBeUndefined();
     expect(await listCases()).toHaveLength(1);
   });
 
   it('stores photos per case and deletes them with the case', async () => {
-    const c = createCase({ ...building, name: 'P' }, meta);
-    const other = createCase({ ...building, name: 'Q' }, meta);
+    const c = createCase(makeSite({ name: 'P' }), [building], meta);
+    const other = createCase(makeSite({ name: 'Q' }), [building], meta);
     await saveCase(c);
     await saveCase(other);
     const photo = (id: string, caseId: string): PhotoRecord => ({
@@ -78,7 +74,7 @@ describe('caseStore', () => {
     const got = await getReference('r1');
     expect(new Uint8Array(await got!.blob.arrayBuffer())).toEqual(new Uint8Array([37, 80, 68, 70]));
     // 案件を消しても資料は残る
-    const c = createCase(building, meta);
+    const c = createCase(makeSite(), [building], meta);
     await saveCase(c);
     await deleteCase(c.id);
     expect(await getReference('r1')).toBeDefined();

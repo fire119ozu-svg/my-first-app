@@ -1,9 +1,10 @@
 import { EQUIPMENT_OPTIONS, FACILITY_OPTIONS, NOTIFICATION_OPTIONS, NOTIFICATION_STATUS_OPTIONS } from '../data/labels';
 import { USAGE_CATEGORIES } from '../data/usageCategories';
-import type { BuildingFormState, FormErrors, RenovationForm } from '../logic/buildingForm';
+import { emptyTenant, formFloorKeys, summarizeCapacity, type BuildingFormState, type FormErrors, type RenovationForm } from '../logic/buildingForm';
 import { isCompositeUsage } from '../logic/extractChecklist';
 import type { UsageCategory } from '../types/inspection';
-import { ChipGroup, Field, NumberInput, PersonInput, Section, Segmented, TextInput, Toggle } from './controls';
+import { FloorCapacityInput, TenantsInput } from './CapacityInputs';
+import { ChipGroup, Field, NumberInput, Section, Segmented, TextInput, Toggle } from './controls';
 import { PhotoStrip } from './PhotoStrip';
 
 /** 増改築の写真操作(保存処理は画面側で行う) */
@@ -18,37 +19,40 @@ const RENOVATION_OPTIONS: { value: 'yes' | 'no'; label: string }[] = [
   { value: 'no', label: '無' },
 ];
 
-/** 複合用途の構成用途として選べるもの(16項以降を除く) */
-const SUB_USAGE_OPTIONS = USAGE_CATEGORIES.filter(
-  (u) => !['16イ', '16ロ', '16の2', '16の3', '17', '18', '19', '20'].includes(u.code),
-).map((u) => ({ value: u.code, label: `${u.code} ${u.label}` }));
-
 interface Props {
   form: BuildingFormState;
   errors: FormErrors;
   onChange: (next: BuildingFormState) => void;
   renovationPhotos: RenovationPhotoHandlers;
+  /** 棟の見出し(例:A棟) */
+  title: string;
 }
 
-export function BuildingForm({ form, errors, onChange, renovationPhotos }: Props) {
+/** 1棟ぶんの入力(用途・増改築・規模・構造・設備・届出) */
+export function BuildingForm({ form, errors, onChange, renovationPhotos, title }: Props) {
   const set = <K extends keyof BuildingFormState>(key: K, value: BuildingFormState[K]) =>
     onChange({ ...form, [key]: value });
   const reno = form.renovation;
   const setReno = (patch: Partial<RenovationForm>) => set('renovation', { ...reno, ...patch });
+  const composite = !!form.usage && isCompositeUsage(form.usage);
+  const floors = formFloorKeys(form);
+  const summary = summarizeCapacity(form);
 
   return (
     <form className="building-form" onSubmit={(e) => e.preventDefault()} noValidate>
-      <Section title="基本情報">
-        <TextInput label="名称" required value={form.name} error={errors.name} onChange={(v) => set('name', v)} placeholder="例:○○ビル" />
-        <TextInput label="所在地" value={form.address} onChange={(v) => set('address', v)} placeholder="例:高知市本町○丁目" />
-        <PersonInput label="代表者" titlePlaceholder="例:代表取締役" value={form.representative} onChange={(v) => set('representative', v)} />
-        <PersonInput label="立会者" titlePlaceholder="例:防火管理者" hint="検査情報の立会者と連動" value={form.witness} onChange={(v) => set('witness', v)} />
+      <Section title={`${title}の用途`}>
+        <TextInput label="棟名" value={form.label} onChange={(v) => set('label', v)} placeholder="例:A棟、本館(1棟のみなら空欄可)" />
         <Field label="用途(令別表第一)" required error={errors.usage}>
           {(id) => (
             <select
               id={id}
               value={form.usage}
-              onChange={(e) => set('usage', e.target.value as UsageCategory | '')}
+              onChange={(e) => {
+                const usage = e.target.value as UsageCategory | '';
+                // 16項に切り替えたら、テナントの入力欄を1行用意する
+                const tenants = usage && isCompositeUsage(usage) && form.tenants.length === 0 ? [emptyTenant()] : form.tenants;
+                onChange({ ...form, usage, tenants });
+              }}
             >
               <option value="">選択してください</option>
               {USAGE_CATEGORIES.map((u) => (
@@ -59,20 +63,7 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos }: Props
             </select>
           )}
         </Field>
-        {form.usage && isCompositeUsage(form.usage) && (
-          <div className={`field${errors.subUsages ? ' has-error' : ''}`}>
-            <span className="field-label">
-              含まれる用途<span className="required">必須</span>
-            </span>
-            <ChipGroup
-              ariaLabel="含まれる用途"
-              options={SUB_USAGE_OPTIONS}
-              selected={form.subUsages}
-              onChange={(v) => set('subUsages', v)}
-            />
-            {errors.subUsages && <p className="field-error">{errors.subUsages}</p>}
-          </div>
-        )}
+        {composite && <p className="field-hint usage-hint">含まれる用途は、下の「規模」で入力するテナントの用途から自動で設定されます。</p>}
 
         <div className="field renovation">
           <span className="field-label">増改築の有無</span>
@@ -118,13 +109,31 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos }: Props
         </div>
       </Section>
 
-      <Section title="規模">
+      <Section title={`${title}の規模`}>
         <NumberInput label="延べ面積" unit="㎡" decimal value={form.totalFloorArea} error={errors.totalFloorArea} onChange={(v) => set('totalFloorArea', v)} />
         <div className="field-row">
           <NumberInput label="地上階数" unit="階" value={form.floorsAbove} error={errors.floorsAbove} onChange={(v) => set('floorsAbove', v)} />
           <NumberInput label="地下階数" unit="階" value={form.floorsBelow} error={errors.floorsBelow} onChange={(v) => set('floorsBelow', v)} />
         </div>
-        <NumberInput label="収容人員" unit="人" value={form.capacity} error={errors.capacity} onChange={(v) => set('capacity', v)} hint="令第1条の3により算定した人数" />
+        {composite ? (
+          <TenantsInput
+            tenants={form.tenants}
+            floors={floors}
+            errors={errors}
+            summary={summary}
+            fallback={form.capacityFallback}
+            onChange={(v) => set('tenants', v)}
+          />
+        ) : (
+          <FloorCapacityInput
+            floors={floors}
+            values={form.floorCapacities}
+            errors={errors}
+            summary={summary}
+            fallback={form.capacityFallback}
+            onChange={(v) => set('floorCapacities', v)}
+          />
+        )}
       </Section>
 
       <Section title="構造・管理">

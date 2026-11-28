@@ -110,7 +110,8 @@ export interface PersonInfo {
   name: string;
 }
 
-export interface BuildingInfo {
+/** 対象物(敷地)全体の情報。棟が複数あっても1つ */
+export interface SiteInfo {
   /** 対象物名称 */
   name: string;
   /** 所在地 */
@@ -119,10 +120,37 @@ export interface BuildingInfo {
   representative?: PersonInfo;
   /** 立会者 */
   witness?: PersonInfo;
+}
+
+/** 複合用途(16項)のテナント */
+export interface Tenant {
+  id: string;
+  name: string;
+  /** 用途の項(未選択は空文字) */
+  usage: UsageCategory | '';
+  /** 入居階(未選択は空文字)。複数階に入るテナントは階ごとに1行 */
+  floor: FloorKey | '';
+  /** 床面積(㎡) */
+  area?: number;
+  /** 収容人員 */
+  capacity?: number;
+}
+
+/**
+ * 棟ごとの情報。消防法令上は原則として棟ごとに防火対象物となるため、
+ * 用途・規模・設備等とチェック項目の抽出は棟単位で行う。
+ */
+export interface BuildingInfo {
+  /** 棟の識別子(案件内で一意) */
+  id: string;
+  /** 棟名(例:A棟、本館)。1棟のみなら空でもよい */
+  label: string;
   /** 主たる用途の項 */
   usage: UsageCategory;
-  /** 複合用途(16項)の場合に含まれる用途 */
+  /** 複合用途(16項)の場合に含まれる用途(16項ではテナントの用途から自動設定) */
   subUsages: UsageCategory[];
+  /** 16項のテナント */
+  tenants: Tenant[];
   /** 増改築の有無と内容(未入力は undefined) */
   renovation?: RenovationInfo;
   /** 延べ面積(㎡) */
@@ -131,8 +159,10 @@ export interface BuildingInfo {
   floorsAbove: number;
   /** 地下階数 */
   floorsBelow: number;
-  /** 収容人員(令第1条の3) */
+  /** 収容人員(令第1条の3)の合計。階ごと(16項はテナントごと)の入力から算出 */
   capacity: number;
+  /** 階ごとの収容人員(16項ではテナントの収容人員を階ごとに合計したもの) */
+  floorCapacities: Record<FloorKey, number>;
   /** 高さ31mを超えるか(高層建築物:法第8条の2、第8条の3) */
   isHighRise: boolean;
   /** 無窓階の有無(令第10条第1項第1号) */
@@ -275,6 +305,9 @@ export const CHECK_RESULT_LABELS: Record<CheckResult, string> = {
 };
 
 export interface CheckEntry {
+  /** 棟ID */
+  buildingId: string;
+  /** チェック項目マスタのID */
   itemId: string;
   /** 未判定は null */
   result: CheckResult | null;
@@ -291,6 +324,11 @@ export interface CheckEntry {
 
 export type CaseStatus = 'draft' | 'inspecting' | 'completed';
 
+export interface BuildingChecklist {
+  buildingId: string;
+  itemIds: string[];
+}
+
 /** 検査案件(端末内に保存する単位) */
 export interface InspectionCase {
   /** crypto.randomUUID() */
@@ -300,10 +338,13 @@ export interface InspectionCase {
   inspectionDate: string;
   /** 検査員 */
   inspectors: Inspector[];
-  building: BuildingInfo;
-  /** 抽出された項目IDの並び(抽出時点のスナップショット) */
-  itemIds: string[];
-  /** 項目IDごとの結果 */
+  /** 対象物(敷地)全体の情報 */
+  site: SiteInfo;
+  /** 棟(1つ以上) */
+  buildings: BuildingInfo[];
+  /** 棟ごとに抽出された項目IDの並び(抽出時点のスナップショット) */
+  checklists: BuildingChecklist[];
+  /** 結果。キーは entryKey(棟ID, 項目ID) */
   entries: Record<string, CheckEntry>;
   /** 案件全体の備考 */
   remarks: string;

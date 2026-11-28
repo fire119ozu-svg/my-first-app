@@ -20,7 +20,7 @@ export function CaseListScreen() {
   }, []);
 
   const remove = async (c: InspectionCase) => {
-    if (!confirm(`「${c.building.name}」を削除しますか?\nこの操作は取り消せません。`)) return;
+    if (!confirm(`「${c.site.name}」を削除しますか?\nこの操作は取り消せません。`)) return;
     await deleteCase(c.id);
     await reload();
   };
@@ -46,12 +46,15 @@ export function CaseListScreen() {
                 <li key={c.id} className={`case-row status-${c.status}`}>
                   <a href={paths.check(c.id)} className="case-link">
                     <div className="case-head">
-                      <span className="case-name">{c.building.name}</span>
+                      <span className="case-name">{c.site.name}</span>
                       <span className={`status-badge ${c.status}`}>{CASE_STATUS_LABELS[c.status]}</span>
                     </div>
                     <div className="case-sub">
-                      {c.inspectionDate} ・ {getUsageInfo(c.building.usage).code}項
-                      {c.building.address && ` ・ ${c.building.address}`}
+                      {c.inspectionDate} ・{' '}
+                      {c.buildings.length > 1
+                        ? `${c.buildings.length}棟`
+                        : `${getUsageInfo(c.buildings[0].usage).code}項`}
+                      {c.site.address && ` ・ ${c.site.address}`}
                     </div>
                     <div className="progress" aria-label={`進捗 ${pct}%`}>
                       <div className="progress-bar" style={{ width: `${pct}%` }} />

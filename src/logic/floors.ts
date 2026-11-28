@@ -2,7 +2,7 @@
  * 階の一覧・表示・集計。
  */
 import type { BuildingInfo, FloorKey, ItemFieldValue } from '../types/inspection';
-import { parseNumber } from './buildingForm';
+import { parseNumber } from './number';
 
 /** 地下の深い階から順に地上最上階まで(例:B2, B1, 1, 2, 3) */
 export function floorKeys(building: Pick<BuildingInfo, 'floorsAbove' | 'floorsBelow'>): FloorKey[] {

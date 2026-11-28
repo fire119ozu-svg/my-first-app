@@ -931,3 +931,96 @@ fieldset.item-field > legend + * { clear: both; }
   border-radius: 0 10px 10px 0;
   background: var(--color-bg);
 }
+
+/* ---------- 棟の切り替え ---------- */
+.building-tabs-title { margin-top: 4px; }
+.building-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.building-tabs .chip { display: inline-flex; align-items: center; gap: 6px; }
+.building-tabs .chip.add { border-style: dashed; color: var(--color-primary); font-weight: 600; }
+.building-tabs .chip.invalid { border-color: var(--color-ng); }
+.tab-alert {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-ng);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.danger-btn + .danger-btn { margin-top: 10px; }
+.usage-hint { margin-top: -6px; margin-bottom: 14px; }
+.action-count small { margin-left: 4px; }
+
+/* ---------- 収容人員 ---------- */
+.capacity-field, .tenants-field { margin: 0 0 14px; padding: 0; border: none; min-width: 0; }
+.capacity-field > legend, .tenants-field > legend { padding: 0; }
+.capacity-field .field-hint, .tenants-field .field-hint { margin: 0 0 8px; }
+.capacity-notice {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff4e0;
+  color: var(--color-warn);
+  font-size: 0.8rem;
+}
+.floor-row.has-error .item-field-input { border-color: var(--color-ng); }
+.capacity-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.capacity-total strong { font-size: 1.25rem; }
+
+/* ---------- テナント ---------- */
+.tenant-card {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+}
+.tenant-head { display: flex; gap: 8px; margin-bottom: 6px; }
+.tenant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.tenant-grid > div { min-width: 0; }
+.tenant-card input[type='text'],
+.tenant-card select {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 16px;
+  color: var(--color-text);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.tenant-card .tenant-name { flex: 1; font-weight: 600; }
+.tenant-card select {
+  padding-right: 24px;
+  background-image: linear-gradient(45deg, transparent 50%, #888 50%), linear-gradient(135deg, #888 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+}
+.tenant-card input.num { text-align: right; }
+.tenant-card .has-error input, .tenant-card .has-error select { border-color: var(--color-ng); }
+.tenant-card input:focus, .tenant-card select:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+.tenant-card .field-error { margin: 4px 0 0; }
+.tenant-summary { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--color-bg); }
+.tenant-summary p { margin: 0 0 8px; font-size: 0.9rem; }
+.capacity-by-floor { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
+.capacity-by-floor li { display: flex; justify-content: space-between; padding: 2px 0; }
+
+/* ---------- 現場チェック:棟 ---------- */
+.check-building-tabs { margin-bottom: 8px; }
+.check-building-tabs .chip.done:not(.on) { border-color: var(--color-ok); color: var(--color-ok); }
+.building-summary { margin: 0 4px 12px; color: var(--color-muted); font-size: 0.8rem; }
+.building-summary strong { color: var(--color-text); }

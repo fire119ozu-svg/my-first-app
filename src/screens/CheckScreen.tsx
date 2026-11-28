@@ -6,9 +6,13 @@ import { Header, HeaderLink } from '../components/Header';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { groupByCategory } from '../logic/extractChecklist';
 import { asPerFloor, asText, floorKeys, floorLabel, sumPerFloor } from '../logic/floors';
+import { getUsageInfo } from '../data/usageCategories';
 import {
   addEntryPhoto,
+  buildingName,
   caseProgress,
+  checklistOf,
+  entryKey,
   newId,
   removeEntryPhoto,
   setPhotoCaption,
@@ -51,6 +55,8 @@ type SaveState = 'saved' | 'saving' | 'error';
 export function CheckScreen({ caseId }: { caseId: string }) {
   const [data, setData] = useState<InspectionCase | null | undefined>(undefined);
   const [filter, setFilter] = useState<Filter>('all');
+  /** 表示中の棟(複数棟の場合) */
+  const [activeBuilding, setActiveBuilding] = useState(0);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [exporting, setExporting] = useState(false);
   const [showingRefs, setShowingRefs] = useState(false);
@@ -85,35 +91,35 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   }, []);
 
   const onResult = useCallback(
-    (itemId: string, result: CheckResult | null) => commit((c) => updateEntry(c, itemId, { result })),
+    (key: string, result: CheckResult | null) => commit((c) => updateEntry(c, key, { result })),
     [commit],
   );
   const onMemo = useCallback(
-    (itemId: string, memo: string) => commit((c) => updateEntry(c, itemId, { memo })),
+    (key: string, memo: string) => commit((c) => updateEntry(c, key, { memo })),
     [commit],
   );
 
   const onField = useCallback(
-    (itemId: string, key: string, value: ItemFieldValue) =>
-      commit((c) => updateEntryField(c, itemId, key, value)),
+    (key: string, fieldKey: string, value: ItemFieldValue) =>
+      commit((c) => updateEntryField(c, key, fieldKey, value)),
     [commit],
   );
 
   const onAddPhotos = useCallback(
-    async (itemId: string, files: File[]) => {
+    async (key: string, files: File[]) => {
       const caseId = current.current?.id;
       if (!caseId) return;
       setPhotoError(null);
       const bump = (n: number) =>
-        setPendingPhotos((p) => ({ ...p, [itemId]: Math.max(0, (p[itemId] ?? 0) + n) }));
+        setPendingPhotos((p) => ({ ...p, [key]: Math.max(0, (p[key] ?? 0) + n) }));
       bump(files.length);
       // 端末のメモリを圧迫しないよう1枚ずつ処理する
       for (const file of files) {
         try {
           const img = await processImage(file);
           const id = newId();
-          await savePhoto({ id, caseId, itemId, ...img, createdAt: new Date().toISOString() });
-          commit((c) => addEntryPhoto(c, itemId, id));
+          await savePhoto({ id, caseId, itemId: key, ...img, createdAt: new Date().toISOString() });
+          commit((c) => addEntryPhoto(c, key, id));
         } catch (e) {
           setPhotoError(photoErrorMessage(e));
         } finally {
@@ -125,8 +131,8 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   );
 
   const onRemovePhoto = useCallback(
-    (itemId: string, photoId: string) => {
-      commit((c) => removeEntryPhoto(c, itemId, photoId));
+    (key: string, photoId: string) => {
+      commit((c) => removeEntryPhoto(c, key, photoId));
       // 案件側から外した後に本体を消す(失敗しても表示には影響しない)
       void deletePhoto(photoId).catch(() => undefined);
     },
@@ -134,25 +140,25 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   );
 
   const onPhotoCaption = useCallback(
-    (itemId: string, photoId: string, caption: string) =>
-      commit((c) => setPhotoCaption(c, itemId, photoId, caption)),
+    (key: string, photoId: string, caption: string) =>
+      commit((c) => setPhotoCaption(c, key, photoId, caption)),
     [commit],
   );
 
-  const floorsAbove = data?.building.floorsAbove ?? 0;
-  const floorsBelow = data?.building.floorsBelow ?? 0;
+  const bIndex = Math.min(activeBuilding, Math.max(0, (data?.buildings.length ?? 1) - 1));
+  const building = data?.buildings[bIndex];
+  const floorsAbove = building?.floorsAbove ?? 0;
+  const floorsBelow = building?.floorsBelow ?? 0;
   const floors = useMemo(() => floorKeys({ floorsAbove, floorsBelow }), [floorsAbove, floorsBelow]);
 
+  const itemIds = data && building ? checklistOf(data, building.id) : NO_PHOTOS;
   const items = useMemo(
-    () =>
-      (data?.itemIds ?? [])
-        .map((id) => getChecklistItem(id))
-        .filter((i): i is ChecklistItem => i !== undefined),
-    [data?.itemIds],
+    () => itemIds.map((id) => getChecklistItem(id)).filter((i): i is ChecklistItem => i !== undefined),
+    [itemIds],
   );
 
   if (data === undefined) return null;
-  if (data === null) {
+  if (data === null || !building) {
     return (
       <>
         <Header title="案件" left={<HeaderLink href={paths.list()}>‹ 一覧</HeaderLink>} />
@@ -162,11 +168,16 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   }
 
   const readOnly = data.status === 'completed';
-  const progress = caseProgress(data, items.map((i) => i.id));
+  const keyOf = (itemId: string) => entryKey(building.id, itemId);
+  // ヘッダーは案件全体(全棟)、絞り込み・カテゴリは表示中の棟
+  const progress = caseProgress(data);
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const bProgress = caseProgress(data, items.map((i) => keyOf(i.id)));
+  const multi = data.buildings.length > 1;
+  const usage = getUsageInfo(building.usage);
 
   const visible = items.filter((i) => {
-    const r = data.entries[i.id]?.result ?? null;
+    const r = data.entries[keyOf(i.id)]?.result ?? null;
     if (filter === 'pending') return r === null;
     if (filter === 'nonCompliant') return r === 'nonCompliant';
     return true;
@@ -184,7 +195,7 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   return (
     <>
       <Header
-        title={data.building.name}
+        title={data.site.name}
         left={<HeaderLink href={paths.list()}>‹ 一覧</HeaderLink>}
         right={!readOnly && <HeaderLink href={paths.edit(data.id)}>編集</HeaderLink>}
       >
@@ -222,13 +233,43 @@ export function CheckScreen({ caseId }: { caseId: string }) {
           <p className="error-banner">端末への保存に失敗しました。空き容量を確認してください。</p>
         )}
 
+        {multi && (
+          <div className="building-tabs check-building-tabs" role="tablist" aria-label="棟">
+            {data.buildings.map((b, i) => {
+              const p = caseProgress(data, checklistOf(data, b.id).map((id) => entryKey(b.id, id)));
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === bIndex}
+                  className={`chip${i === bIndex ? ' on' : ''}${p.total > 0 && p.done === p.total ? ' done' : ''}`}
+                  onClick={() => {
+                    setActiveBuilding(i);
+                    window.scrollTo(0, 0);
+                  }}
+                >
+                  {buildingName(b, i)} {p.done}/{p.total}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <p className="building-summary">
+          {multi && <strong>{buildingName(building, bIndex)}:</strong>}
+          {usage.code}項 {usage.label}
+          {building.subUsages.length > 0 && `(${building.subUsages.map((u) => `${u}項`).join('・')})`}・
+          {building.totalFloorArea.toLocaleString('ja-JP')}㎡・地上{building.floorsAbove}階
+          {building.floorsBelow > 0 && `地下${building.floorsBelow}階`}・{building.capacity}人
+        </p>
+
         <div className="filter-bar">
           <div className="segmented three" role="radiogroup" aria-label="表示">
             {(
               [
-                ['all', `すべて ${progress.total}`],
-                ['pending', `未判定 ${progress.total - progress.done}`],
-                ['nonCompliant', `否 ${progress.nonCompliant}`],
+                ['all', `すべて ${bProgress.total}`],
+                ['pending', `未判定 ${bProgress.total - bProgress.done}`],
+                ['nonCompliant', `否 ${bProgress.nonCompliant}`],
               ] as [Filter, string][]
             ).map(([v, label]) => (
               <button key={v} type="button" role="radio" aria-checked={filter === v} className={`seg${filter === v ? ' on' : ''}`} onClick={() => setFilter(v)}>
@@ -238,7 +279,7 @@ export function CheckScreen({ caseId }: { caseId: string }) {
           </div>
           <nav className="category-nav" aria-label="カテゴリ">
             {groupByCategory(items).map((g) => {
-              const p = caseProgress(data, g.items.map((i) => i.id));
+              const p = caseProgress(data, g.items.map((i) => keyOf(i.id)));
               return (
                 <a
                   key={g.category}
@@ -264,15 +305,16 @@ export function CheckScreen({ caseId }: { caseId: string }) {
             <h2 className="section-title">{CATEGORY_LABELS[g.category]}</h2>
             {g.items.map((item) => (
               <CheckItemCard
-                key={item.id}
+                key={keyOf(item.id)}
+                entryKey={keyOf(item.id)}
                 item={item}
-                entry={data.entries[item.id]}
+                entry={data.entries[keyOf(item.id)]}
                 floors={floors}
                 readOnly={readOnly}
                 onResult={onResult}
                 onMemo={onMemo}
                 onField={onField}
-                pendingPhotos={pendingPhotos[item.id] ?? 0}
+                pendingPhotos={pendingPhotos[keyOf(item.id)] ?? 0}
                 onAddPhotos={onAddPhotos}
                 onRemovePhoto={onRemovePhoto}
                 onPhotoCaption={onPhotoCaption}
@@ -326,21 +368,24 @@ export function CheckScreen({ caseId }: { caseId: string }) {
 }
 
 interface CardProps {
+  /** 結果のキー(棟ID:項目ID) */
+  entryKey: string;
   item: ChecklistItem;
   entry: CheckEntry | undefined;
   floors: FloorKey[];
   readOnly: boolean;
-  onResult: (itemId: string, result: CheckResult | null) => void;
-  onMemo: (itemId: string, memo: string) => void;
-  onField: (itemId: string, key: string, value: ItemFieldValue) => void;
+  onResult: (key: string, result: CheckResult | null) => void;
+  onMemo: (key: string, memo: string) => void;
+  onField: (key: string, fieldKey: string, value: ItemFieldValue) => void;
   pendingPhotos: number;
-  onAddPhotos: (itemId: string, files: File[]) => void;
-  onRemovePhoto: (itemId: string, photoId: string) => void;
-  onPhotoCaption: (itemId: string, photoId: string, caption: string) => void;
+  onAddPhotos: (key: string, files: File[]) => void;
+  onRemovePhoto: (key: string, photoId: string) => void;
+  onPhotoCaption: (key: string, photoId: string, caption: string) => void;
 }
 
 /** 1項目ぶんのカード。判定ボタンは再タップで未判定に戻せる。 */
 const CheckItemCard = memo(function CheckItemCard({
+  entryKey: key,
   item,
   entry,
   floors,
@@ -383,7 +428,7 @@ const CheckItemCard = memo(function CheckItemCard({
             aria-checked={result === r}
             disabled={readOnly}
             className={`result-btn ${r}${result === r ? ' on' : ''}`}
-            onClick={() => onResult(item.id, result === r ? null : r)}
+            onClick={() => onResult(key, result === r ? null : r)}
           >
             {CHECK_RESULT_LABELS[r]}
           </button>
@@ -396,7 +441,7 @@ const CheckItemCard = memo(function CheckItemCard({
           value={entry?.fields?.[def.key]}
           floors={floors}
           readOnly={readOnly}
-          onChange={(v) => onField(item.id, def.key, v)}
+          onChange={(v) => onField(key, def.key, v)}
         />
       ))}
       <PhotoStrip
@@ -405,9 +450,9 @@ const CheckItemCard = memo(function CheckItemCard({
         captions={entry?.photoCaptions ?? NO_CAPTIONS}
         readOnly={readOnly}
         pending={pendingPhotos}
-        onAdd={(files) => onAddPhotos(item.id, files)}
-        onRemove={(id) => onRemovePhoto(item.id, id)}
-        onCaption={(id, caption) => onPhotoCaption(item.id, id, caption)}
+        onAdd={(files) => onAddPhotos(key, files)}
+        onRemove={(id) => onRemovePhoto(key, id)}
+        onCaption={(id, caption) => onPhotoCaption(key, id, caption)}
       />
       <AutoTextarea
         className="memo"
@@ -415,7 +460,7 @@ const CheckItemCard = memo(function CheckItemCard({
         disabled={readOnly}
         ariaLabel={`${item.title}のメモ`}
         placeholder={result === 'nonCompliant' ? '指摘内容・是正指導の内容' : 'メモ'}
-        onChange={(v) => onMemo(item.id, v)}
+        onChange={(v) => onMemo(key, v)}
       />
     </article>
   );

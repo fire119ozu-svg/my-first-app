@@ -1,18 +1,20 @@
 /**
  * 検査案件から Excel ブックを生成する。すべて端末内で処理し、外部へは送信しない。
  *
+ * 棟が複数ある場合は、棟ごとに見出しを付けて続けて出力する(番号は通し番号)。
+ *
  * シート構成:
  *   1. チェックリスト … 案件情報・判定集計・全項目の判定/記録/メモ・備考
  *   2. 指摘事項       … 判定「否」の項目のみ(指導・通知書作成用)
- *   3. 階別記録       … 階ごとの入力欄(消火器の能力単位など)がある場合のみ
- *   4. 写真           … 添付写真がある場合のみ(項目ごとに画像を貼り付け)
+ *   3. 階別記録       … 階ごとの収容人員・階ごとの入力欄(消火器の能力単位など)
+ *   4. 写真           … 添付写真がある場合のみ(増改築・項目ごとに画像を貼り付け)
  *   5. 対象物情報     … 入力した対象物情報と届出状況
  */
 import type ExcelJS from 'exceljs';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
-import { caseProgress, formatInspector } from '../logic/inspectionCase';
-import type { ChecklistItem, CheckResult, FloorKey, InspectionCase } from '../types/inspection';
+import { buildingName, caseProgress, checklistOf, entryKey, formatInspector } from '../logic/inspectionCase';
+import type { BuildingInfo, ChecklistItem, CheckResult, FloorKey, InspectionCase } from '../types/inspection';
 import {
   estimateLines,
   formatEquipment,
@@ -80,8 +82,23 @@ function fitRowHeight(ws: Worksheet, row: ExcelJS.Row, widths: number[]) {
   void ws;
 }
 
-function caseItems(c: InspectionCase): ChecklistItem[] {
-  return c.itemIds.map(getChecklistItem).filter((i): i is ChecklistItem => i !== undefined);
+/** 出力する1行(棟 × 項目)。no は全棟の通し番号 */
+interface Row {
+  building: BuildingInfo;
+  bIndex: number;
+  item: ChecklistItem;
+  key: string;
+  no: number;
+}
+
+function caseRows(c: InspectionCase): Row[] {
+  let no = 0;
+  return c.buildings.flatMap((building, bIndex) =>
+    checklistOf(c, building.id)
+      .map(getChecklistItem)
+      .filter((i): i is ChecklistItem => i !== undefined)
+      .map((item) => ({ building, bIndex, item, key: entryKey(building.id, item.id), no: ++no })),
+  );
 }
 
 function printSetup(ws: Worksheet, headerRow?: number) {
@@ -110,23 +127,30 @@ export interface ExportPhoto {
 
 interface Ctx {
   c: InspectionCase;
-  items: ChecklistItem[];
-  floors: FloorKey[];
+  rows: Row[];
+  /** 棟が複数あるか(棟名を表示するか) */
+  multi: boolean;
   photos: Map<string, ExportPhoto>;
 }
 
+/** 棟名(複数棟の場合のみ)を前置した表示 */
+function withBuilding(ctx: Ctx, row: Row, text: string, sep = ' '): string {
+  return ctx.multi ? `${buildingName(row.building, row.bIndex)}${sep}${text}` : text;
+}
+
 /** 項目に添付され、出力できる写真(添付順) */
-function itemPhotos(ctx: Ctx, itemId: string): ExportPhoto[] {
-  return (ctx.c.entries[itemId]?.photoIds ?? [])
+function itemPhotos(ctx: Ctx, key: string): ExportPhoto[] {
+  return (ctx.c.entries[key]?.photoIds ?? [])
     .map((id) => ctx.photos.get(id))
     .filter((p): p is ExportPhoto => p !== undefined);
 }
 
 /** 記録事項セル:追加入力欄の値と写真枚数 */
-function recordText(ctx: Ctx, item: ChecklistItem): string {
-  const entry = ctx.c.entries[item.id];
-  const lines = (item.fields ?? []).map((d) => formatField(d, entry?.fields?.[d.key], ctx.floors)).filter(Boolean);
-  const n = itemPhotos(ctx, item.id).length;
+function recordText(ctx: Ctx, row: Row): string {
+  const entry = ctx.c.entries[row.key];
+  const floors = floorKeys(row.building);
+  const lines = (row.item.fields ?? []).map((d) => formatField(d, entry?.fields?.[d.key], floors)).filter(Boolean);
+  const n = itemPhotos(ctx, row.key).length;
   if (n > 0) lines.push(`写真 ${n}枚(「写真」シート)`);
   return lines.join('\n');
 }
@@ -147,11 +171,34 @@ const LIST_COLUMNS = [
 ];
 const LIST_WIDTHS = LIST_COLUMNS.map((c) => c.width);
 
+/** 棟の概要(複数棟の見出し・一覧用) */
+function buildingSummary(b: BuildingInfo): string {
+  return [
+    `${formatUsage(b)}(${formatSpecified(b)})`,
+    `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`,
+    formatFloors(b),
+    `${b.capacity}人`,
+    `増改築:${formatRenovation(b)}`,
+  ].join('・');
+}
+
+/** A-B見出し+C-H値の1行 */
+function wideRow(ws: Worksheet, r: number, label: string, value: string, opts: { bold?: boolean; color?: string } = {}) {
+  ws.mergeCells(r, 1, r, 2);
+  ws.mergeCells(r, 3, r, 8);
+  ws.getCell(r, 1).value = label;
+  style(ws.getCell(r, 1), { bold: true, fill: COLOR.labelFill });
+  ws.getCell(r, 3).value = value;
+  style(ws.getCell(r, 3), opts);
+  ws.getRow(r).height = Math.max(20, estimateLines(value, 140) * LINE_HEIGHT + 4);
+}
+
 function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
-  const { c, items } = ctx;
+  const { c, rows, multi } = ctx;
   const ws = wb.addWorksheet('チェックリスト', { views: [{ state: 'frozen', ySplit: 0 }] });
   ws.columns = LIST_COLUMNS.map((col) => ({ width: col.width }));
-  const b = c.building;
+  const site = c.site;
+  const b = c.buildings[0];
 
   // タイトル
   ws.mergeCells('A1:H1');
@@ -163,12 +210,16 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
 
   // 案件情報(左:A-B見出し/C-D値、右:E見出し/F-H値)
   const info: [string, string, string, string][] = [
-    ['対象物名称', b.name, '検査日', c.inspectionDate],
-    ['所在地', b.address || '', '検査員', c.inspectors.map(formatInspector).join('、')],
-    ['代表者', formatPerson(b.representative), '立会者', formatPerson(b.witness)],
-    ['用途', formatUsage(b), '区分', formatSpecified(b)],
-    ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`, '階数', formatFloors(b)],
-    ['収容人員', `${b.capacity}人`, '状態', formatStatus(c)],
+    ['対象物名称', site.name, '検査日', c.inspectionDate],
+    ['所在地', site.address || '', '検査員', c.inspectors.map(formatInspector).join('、')],
+    ['代表者', formatPerson(site.representative), '立会者', formatPerson(site.witness)],
+    ...(multi
+      ? ([['棟数', `${c.buildings.length}棟`, '状態', formatStatus(c)]] as [string, string, string, string][])
+      : ([
+          ['用途', formatUsage(b), '区分', formatSpecified(b)],
+          ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`, '階数', formatFloors(b)],
+          ['収容人員', `${b.capacity}人`, '状態', formatStatus(c)],
+        ] as [string, string, string, string][])),
   ];
   let r = 3;
   for (const [l1, v1, l2, v2] of info) {
@@ -188,27 +239,24 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
     r++;
   }
 
-  // 増改築
-  ws.mergeCells(r, 1, r, 2);
-  ws.mergeCells(r, 3, r, 8);
-  ws.getCell(r, 1).value = '増改築';
-  style(ws.getCell(r, 1), { bold: true, fill: COLOR.labelFill });
-  ws.getCell(r, 3).value = formatRenovation(b);
-  style(ws.getCell(r, 3));
-  ws.getRow(r).height = 20;
-  r++;
+  if (multi) {
+    // 棟ごとの概要
+    c.buildings.forEach((x, i) => wideRow(ws, r++, buildingName(x, i), buildingSummary(x)));
+  } else {
+    wideRow(ws, r++, '増改築', formatRenovation(b));
+  }
 
   // 判定集計
-  const p = caseProgress(c, items.map((i) => i.id));
-  ws.mergeCells(r, 1, r, 2);
-  ws.mergeCells(r, 3, r, 8);
-  ws.getCell(r, 1).value = '判定集計';
-  style(ws.getCell(r, 1), { bold: true, fill: COLOR.labelFill });
-  ws.getCell(r, 3).value =
-    `全${p.total}項目 適 ${p.compliant} / 否 ${p.nonCompliant} / 該当なし ${p.notApplicable} / 未判定 ${p.total - p.done}`;
-  style(ws.getCell(r, 3), { bold: true, color: p.nonCompliant > 0 ? COLOR.ngText : undefined });
-  ws.getRow(r).height = 20;
-  r += 2;
+  const progressText = (keys?: string[]) => {
+    const p = caseProgress(c, keys);
+    return {
+      text: `全${p.total}項目 適 ${p.compliant} / 否 ${p.nonCompliant} / 該当なし ${p.notApplicable} / 未判定 ${p.total - p.done}`,
+      color: p.nonCompliant > 0 ? COLOR.ngText : undefined,
+    };
+  };
+  const total = progressText();
+  wideRow(ws, r++, '判定集計', total.text, { bold: true, color: total.color });
+  r++;
 
   // 明細
   const headerRowNo = r;
@@ -221,13 +269,24 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
   header.height = 20;
   r++;
 
-  items.forEach((item, idx) => {
-    const entry = c.entries[item.id];
+  rows.forEach((x, i) => {
+    // 複数棟:棟の見出し行
+    if (multi && (i === 0 || rows[i - 1].building !== x.building)) {
+      ws.mergeCells(r, 1, r, 8);
+      const head = ws.getCell(r, 1);
+      const p = progressText(rows.filter((y) => y.building === x.building).map((y) => y.key));
+      head.value = `${buildingName(x.building, x.bIndex)} ${formatUsage(x.building)}  ${p.text}`;
+      style(head, { bold: true, fill: COLOR.labelFill, color: p.color });
+      ws.getRow(r).height = 20;
+      r++;
+    }
+    const { item } = x;
+    const entry = c.entries[x.key];
     const result = entry?.result ?? null;
-    const record = recordText(ctx, item);
+    const record = recordText(ctx, x);
     const row = ws.getRow(r);
     row.values = [
-      idx + 1,
+      x.no,
       CATEGORY_LABELS[item.category],
       `${item.title}\n(${item.id})`,
       item.checkPoint,
@@ -266,7 +325,8 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
   ws.getRow(r).height = 26;
 
   ws.views = [{ state: 'frozen', ySplit: headerRowNo }];
-  ws.autoFilter = { from: { row: headerRowNo, column: 1 }, to: { row: headerRowNo + items.length, column: 8 } };
+  // 棟の見出し行があると絞り込みが崩れるため、1棟の場合のみ設定
+  if (!multi) ws.autoFilter = { from: { row: headerRowNo, column: 1 }, to: { row: headerRowNo + rows.length, column: 8 } };
   printSetup(ws, headerRowNo);
 }
 
@@ -275,7 +335,7 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
 // ---------------------------------------------------------------------------
 
 function addFindingsSheet(wb: Workbook, ctx: Ctx) {
-  const { c, items } = ctx;
+  const { c, rows } = ctx;
   const ws = wb.addWorksheet('指摘事項');
   const cols = [
     { header: 'No', width: 5 },
@@ -288,7 +348,7 @@ function addFindingsSheet(wb: Workbook, ctx: Ctx) {
   ws.columns = cols.map((x) => ({ width: x.width }));
 
   ws.mergeCells('A1:E1');
-  ws.getCell('A1').value = `指摘事項 ${c.building.name}(検査日 ${c.inspectionDate})`;
+  ws.getCell('A1').value = `指摘事項 ${c.site.name}(検査日 ${c.inspectionDate})`;
   ws.getCell('A1').font = { name: FONT, size: 14, bold: true };
   ws.getRow(1).height = 24;
 
@@ -299,22 +359,22 @@ function addFindingsSheet(wb: Workbook, ctx: Ctx) {
   });
   header.height = 20;
 
-  const ng = items.filter((i) => c.entries[i.id]?.result === 'nonCompliant');
+  const ng = rows.filter((x) => c.entries[x.key]?.result === 'nonCompliant');
   if (ng.length === 0) {
     ws.mergeCells('A4:E4');
     ws.getCell('A4').value = '指摘事項なし';
     style(ws.getCell('A4'), { center: true });
     ws.getRow(4).height = 22;
   }
-  ng.forEach((item, idx) => {
-    const entry = c.entries[item.id];
+  ng.forEach((x, idx) => {
+    const entry = c.entries[x.key];
     const row = ws.getRow(4 + idx);
     row.values = [
       idx + 1,
-      `${item.title}\n(${item.id})`,
-      formatLegal(item.legalBasis),
+      withBuilding(ctx, x, `${x.item.title}\n(${x.item.id})`, '\n'),
+      formatLegal(x.item.legalBasis),
       entry?.memo || '(指摘内容未記入)',
-      recordText(ctx, item),
+      recordText(ctx, x),
     ];
     row.eachCell({ includeEmpty: true }, (cell, col) => style(cell, { center: col === 1 }));
     fitRowHeight(ws, row, widths);
@@ -326,80 +386,125 @@ function addFindingsSheet(wb: Workbook, ctx: Ctx) {
 // 3. 階別記録
 // ---------------------------------------------------------------------------
 
-function addPerFloorSheet(wb: Workbook, c: InspectionCase, items: ChecklistItem[]) {
-  const floors = floorKeys(c.building);
-  const columns = items.flatMap((item) =>
-    (item.fields ?? [])
-      .filter((d) => d.kind === 'perFloorNumber')
-      .map((def) => ({ item, def, value: c.entries[item.id]?.fields?.[def.key] }))
-      .filter(({ value }) => sumPerFloor(value, floors).filled + sumPerFloor(value, floors).invalid > 0),
-  );
-  if (columns.length === 0 || floors.length === 0) return;
+/** 1棟ぶんの階別記録の列(収容人員+階ごとの入力欄) */
+function perFloorColumns(ctx: Ctx, building: BuildingInfo) {
+  const floors = floorKeys(building);
+  const capacity =
+    Object.keys(building.floorCapacities).length > 0
+      ? [
+          {
+            title: '収容人員\n(人)',
+            value: (f: FloorKey): number | string | null => building.floorCapacities[f] ?? null,
+            total: Object.values(building.floorCapacities).reduce((a, b) => a + b, 0) as number | null,
+          },
+        ]
+      : [];
+  const fields = ctx.rows
+    .filter((x) => x.building === building)
+    .flatMap((x) =>
+      (x.item.fields ?? [])
+        .filter((d) => d.kind === 'perFloorNumber')
+        .map((def) => ({ def, value: ctx.c.entries[x.key]?.fields?.[def.key], item: x.item }))
+        .filter(({ value }) => sumPerFloor(value, floors).filled + sumPerFloor(value, floors).invalid > 0)
+        .map(({ def, value, item }) => ({
+          title: `${item.title}\n${def.label}${def.kind === 'perFloorNumber' ? `(${def.unit})` : ''}`,
+          value: (f: FloorKey): number | string | null => {
+            const raw = (asPerFloor(value)[f] ?? '').trim();
+            const n = sumPerFloor({ [f]: raw }, [f]);
+            // 数値として読めるものは数値で出力(Excel上で再計算できるように)
+            return raw === '' ? null : n.filled ? n.total : raw;
+          },
+          total: sumPerFloor(value, floors).total as number | null,
+        })),
+    );
+  return { floors, columns: [...capacity, ...fields] };
+}
+
+function addPerFloorSheet(wb: Workbook, ctx: Ctx) {
+  const blocks = ctx.c.buildings
+    .map((b, i) => ({ b, i, ...perFloorColumns(ctx, b) }))
+    .filter((x) => x.columns.length > 0 && x.floors.length > 0);
+  if (blocks.length === 0) return;
 
   const ws = wb.addWorksheet('階別記録');
-  ws.columns = [{ width: 12 }, ...columns.map(() => ({ width: 22 }))];
-  ws.getCell('A1').value = '階別記録';
+  const maxCols = Math.max(...blocks.map((x) => x.columns.length));
+  ws.columns = [{ width: 12 }, ...Array.from({ length: maxCols }, () => ({ width: 22 }))];
+  ws.getCell('A1').value = `階別記録 ${ctx.c.site.name}`;
   ws.getCell('A1').font = { name: FONT, size: 14, bold: true };
 
-  const header = ws.getRow(3);
-  header.getCell(1).value = '階';
-  columns.forEach(({ item, def }, i) => {
-    header.getCell(i + 2).value = `${item.title}\n${def.label}${def.kind === 'perFloorNumber' ? `(${def.unit})` : ''}`;
-  });
-  header.eachCell((cell) => style(cell, { bold: true, fill: COLOR.headerFill, color: 'FFFFFFFF', center: true }));
-  header.height = 34;
+  let r = 3;
+  for (const { b, i, floors, columns } of blocks) {
+    if (ctx.multi) {
+      ws.mergeCells(r, 1, r, columns.length + 1);
+      ws.getCell(r, 1).value = buildingName(b, i);
+      style(ws.getCell(r, 1), { bold: true, fill: COLOR.labelFill });
+      r++;
+    }
+    const header = ws.getRow(r);
+    header.getCell(1).value = '階';
+    columns.forEach((col, j) => (header.getCell(j + 2).value = col.title));
+    header.eachCell((cell) => style(cell, { bold: true, fill: COLOR.headerFill, color: 'FFFFFFFF', center: true }));
+    header.height = 34;
+    const first = r + 1;
 
-  // 上の階から順に(図面・報告書の慣例に合わせる)
-  const ordered = [...floors].reverse();
-  ordered.forEach((f, idx) => {
-    const row = ws.getRow(4 + idx);
-    row.getCell(1).value = floorLabel(f);
-    style(row.getCell(1), { center: true, fill: COLOR.labelFill });
-    columns.forEach(({ value }, i) => {
-      const raw = (asPerFloor(value)[f] ?? '').trim();
-      const n = sumPerFloor({ [f]: raw }, [f]);
-      const cell = row.getCell(i + 2);
-      // 数値として読めるものは数値で出力(Excel上で再計算できるように)
-      cell.value = raw === '' ? null : n.filled ? n.total : raw;
-      style(cell, { center: true });
+    // 上の階から順に(図面・報告書の慣例に合わせる)
+    const ordered = [...floors].reverse();
+    ordered.forEach((f, idx) => {
+      const row = ws.getRow(first + idx);
+      row.getCell(1).value = floorLabel(f);
+      style(row.getCell(1), { center: true, fill: COLOR.labelFill });
+      columns.forEach((col, j) => {
+        const cell = row.getCell(j + 2);
+        cell.value = col.value(f);
+        style(cell, { center: true });
+      });
     });
-  });
-  const totalRow = ws.getRow(4 + ordered.length);
-  totalRow.getCell(1).value = '合計';
-  style(totalRow.getCell(1), { bold: true, center: true, fill: COLOR.labelFill });
-  columns.forEach((_, i) => {
-    const col = ws.getColumn(i + 2).letter;
-    const cell = totalRow.getCell(i + 2);
-    const total = sumPerFloor(columns[i].value, floors).total;
-    cell.value = { formula: `SUM(${col}4:${col}${3 + ordered.length})`, result: total };
-    style(cell, { bold: true, center: true });
-  });
-  printSetup(ws, 3);
+    const totalRow = ws.getRow(first + ordered.length);
+    totalRow.getCell(1).value = '合計';
+    style(totalRow.getCell(1), { bold: true, center: true, fill: COLOR.labelFill });
+    columns.forEach((col, j) => {
+      const letter = ws.getColumn(j + 2).letter;
+      const cell = totalRow.getCell(j + 2);
+      cell.value = { formula: `SUM(${letter}${first}:${letter}${first + ordered.length - 1})`, result: col.total ?? 0 };
+      style(cell, { bold: true, center: true });
+    });
+    r = first + ordered.length + 2;
+  }
+  printSetup(ws);
   ws.pageSetup.orientation = 'portrait';
 }
 
 // ---------------------------------------------------------------------------
-// 4. 対象物情報
+// 5. 対象物情報
 // ---------------------------------------------------------------------------
 
-function addBuildingSheet(wb: Workbook, c: InspectionCase) {
-  const ws = wb.addWorksheet('対象物情報');
-  ws.columns = [{ width: 26 }, { width: 60 }];
-  const b = c.building;
+function buildingRows(b: BuildingInfo): [string, string][] {
   const yesNo = (v: boolean) => (v ? 'あり' : 'なし');
-  const rows: [string, string][] = [
-    ['名称', b.name],
-    ['所在地', b.address],
-    ['代表者 役職', b.representative?.title ?? ''],
-    ['代表者 氏名', b.representative?.name ?? ''],
-    ['立会者 役職', b.witness?.title ?? ''],
-    ['立会者 氏名', b.witness?.name ?? ''],
+  const floorCaps = floorKeys(b)
+    .filter((f) => b.floorCapacities[f] !== undefined)
+    .reverse()
+    .map((f) => `${floorLabel(f)} ${b.floorCapacities[f]}人`)
+    .join('、');
+  return [
     ['用途', formatUsage(b)],
     ['区分', formatSpecified(b)],
     ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`],
     ['地上階数', `${b.floorsAbove}階`],
     ['地下階数', `${b.floorsBelow}階`],
     ['収容人員', `${b.capacity}人`],
+    ['階ごとの収容人員', floorCaps],
+    ...b.tenants.map((t, i): [string, string] => [
+      `テナント${i + 1}`,
+      [
+        t.name || '(名称未入力)',
+        t.usage ? formatUsage({ ...b, usage: t.usage, subUsages: [] }) : '用途未入力',
+        t.floor ? floorLabel(t.floor) : '階未設定',
+        t.area !== undefined ? `${t.area.toLocaleString('ja-JP')}㎡` : '',
+        t.capacity !== undefined ? `${t.capacity}人` : '',
+      ]
+        .filter(Boolean)
+        .join(' / '),
+    ]),
     ['高層建築物(31m超)', yesNo(b.isHighRise)],
     ['無窓階', yesNo(b.hasWindowlessFloor)],
     ['特定一階段等防火対象物', b.isSingleStaircase ? '該当' : '非該当'],
@@ -411,6 +516,13 @@ function addBuildingSheet(wb: Workbook, c: InspectionCase) {
     ['設置済みの消防用設備等', formatEquipment(b)],
     ['火気使用設備・危険物等', formatFacilities(b)],
   ];
+}
+
+function addBuildingSheet(wb: Workbook, ctx: Ctx) {
+  const { c, multi } = ctx;
+  const ws = wb.addWorksheet('対象物情報');
+  ws.columns = [{ width: 26 }, { width: 60 }];
+  const site = c.site;
 
   ws.getCell('A1').value = '対象物情報';
   ws.getCell('A1').font = { name: FONT, size: 14, bold: true };
@@ -422,13 +534,32 @@ function addBuildingSheet(wb: Workbook, c: InspectionCase) {
     style(row.getCell(2));
     fitRowHeight(ws, row, [26, 60]);
   };
-  rows.forEach((x) => put(x));
+  const heading = (text: string) => {
+    r++;
+    ws.getCell(r, 1).value = text;
+    ws.getCell(r, 1).font = { name: FONT, size: 12, bold: true };
+    r++;
+  };
 
-  r++;
-  ws.getCell(r, 1).value = '各種届出の状況';
-  ws.getCell(r, 1).font = { name: FONT, size: 12, bold: true };
-  r++;
-  notificationRows(b).forEach((x) => put(x));
+  (
+    [
+      ['名称', site.name],
+      ['所在地', site.address],
+      ['代表者 役職', site.representative?.title ?? ''],
+      ['代表者 氏名', site.representative?.name ?? ''],
+      ['立会者 役職', site.witness?.title ?? ''],
+      ['立会者 氏名', site.witness?.name ?? ''],
+      ...(multi ? ([['棟数', `${c.buildings.length}棟`]] as [string, string][]) : []),
+    ] as [string, string][]
+  ).forEach((x) => put(x));
+
+  c.buildings.forEach((b, i) => {
+    const name = multi ? buildingName(b, i) : '';
+    if (multi) heading(name);
+    buildingRows(b).forEach((x) => put(x));
+    heading(multi ? `${name} 各種届出の状況` : '各種届出の状況');
+    notificationRows(b).forEach((x) => put(x));
+  });
   printSetup(ws);
   ws.pageSetup.orientation = 'portrait';
 }
@@ -444,7 +575,7 @@ const PHOTO_BOX = { width: 330, height: 250 };
 const PHOTO_COL_WIDTH = 49; // ≒ 348px
 
 function addPhotoSheet(wb: Workbook, ctx: Ctx) {
-  const { c, items } = ctx;
+  const { c, rows, multi } = ctx;
   interface Group {
     heading: string;
     headColor?: string;
@@ -452,32 +583,36 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
     photos: ExportPhoto[];
     captions: Record<string, string>;
   }
-  const reno = c.building.renovation;
-  const renoPhotos = (reno?.photoIds ?? []).map((id) => ctx.photos.get(id)).filter((p): p is ExportPhoto => !!p);
-  const groups: Group[] = [
-    // 増改築(対象物情報)の写真を最初に
-    ...(renoPhotos.length
-      ? [{ heading: '増改築(対象物情報)', memo: formatRenovation(c.building), photos: renoPhotos, captions: reno?.photoCaptions ?? {} }]
-      : []),
-    ...items
-      .map((item, idx) => {
-        const entry = c.entries[item.id];
-        return {
-          heading: `No.${idx + 1} ${item.title}(${item.id}) 判定:${formatResult(entry?.result)}`,
-          headColor: RESULT_STYLE[entry?.result ?? 'pending'].color,
-          memo: entry?.memo ?? '',
-          photos: itemPhotos(ctx, item.id),
-          captions: entry?.photoCaptions ?? {},
-        };
-      })
-      .filter((g) => g.photos.length > 0),
-  ];
+  const groups: Group[] = c.buildings.flatMap((b, bIndex) => {
+    const prefix = multi ? `${buildingName(b, bIndex)} ` : '';
+    const reno = b.renovation;
+    const renoPhotos = (reno?.photoIds ?? []).map((id) => ctx.photos.get(id)).filter((p): p is ExportPhoto => !!p);
+    return [
+      // 増改築(対象物情報)の写真を各棟の最初に
+      ...(renoPhotos.length
+        ? [{ heading: `${prefix}増改築(対象物情報)`, memo: formatRenovation(b), photos: renoPhotos, captions: reno?.photoCaptions ?? {} }]
+        : []),
+      ...rows
+        .filter((x) => x.building === b)
+        .map((x) => {
+          const entry = c.entries[x.key];
+          return {
+            heading: `${prefix}No.${x.no} ${x.item.title}(${x.item.id}) 判定:${formatResult(entry?.result)}`,
+            headColor: RESULT_STYLE[entry?.result ?? 'pending'].color,
+            memo: entry?.memo ?? '',
+            photos: itemPhotos(ctx, x.key),
+            captions: entry?.photoCaptions ?? {},
+          };
+        })
+        .filter((g) => g.photos.length > 0),
+    ];
+  });
   if (groups.length === 0) return;
 
   const ws = wb.addWorksheet('写真');
   ws.columns = [{ width: PHOTO_COL_WIDTH }, { width: PHOTO_COL_WIDTH }];
   ws.mergeCells('A1:B1');
-  ws.getCell('A1').value = `写真 ${c.building.name}(検査日 ${c.inspectionDate})`;
+  ws.getCell('A1').value = `写真 ${c.site.name}(検査日 ${c.inspectionDate})`;
   ws.getCell('A1').font = { name: FONT, size: 14, bold: true };
   ws.getRow(1).height = 24;
 
@@ -562,14 +697,14 @@ export function buildWorkbook(ExcelJSLib: typeof ExcelJS, c: InspectionCase, opt
   wb.created = exportedAt;
   const ctx: Ctx = {
     c,
-    items: caseItems(c),
-    floors: floorKeys(c.building),
+    rows: caseRows(c),
+    multi: c.buildings.length > 1,
     photos: new Map((opts.photos ?? []).map((p) => [p.id, p])),
   };
   addChecklistSheet(wb, ctx, exportedAt);
   addFindingsSheet(wb, ctx);
-  addPerFloorSheet(wb, c, ctx.items);
+  addPerFloorSheet(wb, ctx);
   addPhotoSheet(wb, ctx);
-  addBuildingSheet(wb, c);
+  addBuildingSheet(wb, ctx);
   return wb;
 }
