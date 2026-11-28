@@ -20,6 +20,7 @@ import { isCompositeUsage } from './extractChecklist';
 import { floorKeys, floorLabel } from './floors';
 import { newId } from './inspectionCase';
 import { parseNumber } from './number';
+import { toOpeningRecordForms, validateOpeningRecords, type OpeningRecordForm } from './openings';
 
 export { parseNumber };
 
@@ -87,13 +88,15 @@ export type ScaleField = (typeof SCALE_FIELDS)[number];
 
 export type BuildingFormState = Omit<
   BuildingInfo,
-  ScaleField | 'usage' | 'renovation' | 'tenants' | 'capacity' | 'floorCapacities'
+  ScaleField | 'usage' | 'renovation' | 'tenants' | 'capacity' | 'floorCapacities' | 'openingRecords'
 > & {
   usage: UsageCategory | '';
   renovation: RenovationForm;
   tenants: TenantForm[];
   /** 階ごとの収容人員(16項以外) */
   floorCapacities: Record<FloorKey, string>;
+  /** 有効開口部の記録(階ごと) */
+  openingRecords: OpeningRecordForm[];
   /**
    * 階ごとの入力が無かった頃の収容人員の合計(移行データ)。
    * 階ごと(テナントごと)の収容人員が1つも入力されていない間はこの値を使う。
@@ -103,7 +106,8 @@ export type BuildingFormState = Omit<
 
 /**
  * エラーのキー:各欄名、`floor:<階>`、`tenant:<テナントID>:<usage|floor|area|capacity>`、
- * `tenants`(テナント全体)、`capacity`(収容人員全体)、`renovationArea`
+ * `tenants`(テナント全体)、`capacity`(収容人員全体)、`renovationArea`、
+ * 有効開口部は `openingRecord:…`・`opening:…`(openings.ts)
  */
 export type FormErrors = Partial<Record<string, string>>;
 
@@ -130,6 +134,7 @@ export function emptyBuildingForm(id = newId()): BuildingFormState {
     capacityFallback: null,
     isHighRise: false,
     hasWindowlessFloor: false,
+    openingRecords: [],
     isSingleStaircase: false,
     hasMultipleOwners: false,
     installedEquipment: [],
@@ -150,6 +155,7 @@ export function toBuildingForm(b: BuildingInfo): BuildingFormState {
       ? {}
       : Object.fromEntries(Object.entries(b.floorCapacities).map(([k, v]) => [k, String(v)])),
     capacityFallback: entered ? null : b.capacity,
+    openingRecords: toOpeningRecordForms(b.openingRecords ?? []),
     totalFloorArea: String(b.totalFloorArea),
     floorsAbove: String(b.floorsAbove),
     floorsBelow: String(b.floorsBelow),
@@ -279,6 +285,13 @@ export function validateBuildingForm(form: BuildingFormState): {
     else renovationArea = v;
   }
 
+  // 有効開口部(地上階のみ)
+  const openings = validateOpeningRecords(
+    form.openingRecords,
+    floors.filter((f) => !f.startsWith('B')),
+  );
+  Object.assign(errors, openings.errors);
+
   if (Object.keys(errors).length > 0 || !form.usage || summary.total === null) return { building: null, errors };
 
   const { capacityFallback: _fallback, ...rest } = form;
@@ -294,6 +307,7 @@ export function validateBuildingForm(form: BuildingFormState): {
       tenants: composite ? tenants : [],
       capacity: summary.total,
       floorCapacities: summary.byFloor,
+      openingRecords: openings.records,
       ...nums,
     },
     errors: {},

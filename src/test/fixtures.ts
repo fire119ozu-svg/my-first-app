@@ -15,6 +15,7 @@ export function makeBuilding(overrides: Partial<BuildingInfo> = {}): BuildingInf
     floorCapacities: {},
     isHighRise: false,
     hasWindowlessFloor: false,
+    openingRecords: [],
     isSingleStaircase: false,
     hasMultipleOwners: false,
     installedEquipment: [],

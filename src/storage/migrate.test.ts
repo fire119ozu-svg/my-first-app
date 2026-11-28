@@ -100,4 +100,12 @@ describe('migrateCase', () => {
     const c = createCase(makeSite(), [makeBuilding()], { inspectionDate: '2026-11-27', inspectors: [{ rank: '', name: 'X' }] });
     expect(migrateCase(c)).toBe(c);
   });
+  it('adds empty opening records to buildings saved before they existed', () => {
+    const c = createCase(makeSite(), [makeBuilding()], { inspectionDate: '2026-11-27', inspectors: [] });
+    const { openingRecords: _o, ...oldBuilding } = c.buildings[0];
+    void _o;
+    const old = { ...c, buildings: [oldBuilding] } as unknown as InspectionCase;
+    expect(migrateCase(old).buildings[0].openingRecords).toEqual([]);
+    expect(migrateCase(legacyCase()).buildings[0].openingRecords).toEqual([]);
+  });
 });

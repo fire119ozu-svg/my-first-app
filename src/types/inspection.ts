@@ -177,6 +177,8 @@ export interface BuildingInfo {
   isHighRise: boolean;
   /** 無窓階の有無(令第10条第1項第1号) */
   hasWindowlessFloor: boolean;
+  /** 有効開口部の記録(無窓階の判定用、階ごと。記録した階のみ) */
+  openingRecords: OpeningFloorRecord[];
   /** 特定一階段等防火対象物に該当するか(令第4条の2の2第2号) */
   isSingleStaircase: boolean;
   /** 管理について権原が分かれているか(統括防火管理の要否判定) */
@@ -296,6 +298,38 @@ export type ItemFieldValue = string | Record<FloorKey, string>;
 // ---------------------------------------------------------------------------
 // 検査案件・チェック結果
 // ---------------------------------------------------------------------------
+
+/**
+ * 有効開口部の計上方法。
+ * - sliding:引き違い窓など。開く部分(幅の1/2)を有効とする
+ * - full:開き戸・開き窓、容易に破壊できるガラスのはめ殺し窓など、全面を有効とする
+ */
+export type OpeningKind = 'sliding' | 'full';
+
+/** 有効開口部(同じ寸法のものをまとめて箇所数で記録) */
+export interface WindowOpening {
+  id: string;
+  /** 場所(例:東面) */
+  location: string;
+  kind: OpeningKind;
+  /** 幅(cm、建具の外形) */
+  width: number;
+  /** 高さ(cm) */
+  height: number;
+  /** 箇所数 */
+  count: number;
+}
+
+/** 階ごとの有効開口部の記録(規則第5条の3) */
+export interface OpeningFloorRecord {
+  id: string;
+  /** 地上階のみ(例:'3') */
+  floor: FloorKey;
+  /** その階の床面積(㎡)。未入力なら判定しない */
+  floorArea?: number;
+  openings: WindowOpening[];
+  memo: string;
+}
 
 /** 検査員(階級・氏名) */
 export interface Inspector {
