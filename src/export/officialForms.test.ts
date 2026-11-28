@@ -110,9 +110,24 @@ describe('official forms', () => {
     expect(t).toContain('　令和8年11月27日の消防法第４条に基づく指導事項の改修について、下記のとおり報告します。');
     expect(t).toContain('消火器について');
     expect(t).toContain('防炎物品の使用について');
+    // 担当者氏名は査察員(検査員の1人目)
+    let signer = '';
+    ws.eachRow((row) => row.getCell(5).value === '担当者氏名' && (signer = String(row.getCell(7).value)));
+    expect(signer).toBe('消防司令補　消防太郎');
     // 結合セルは各セルが同じ値を返すため、行単位で数える
     let boxes = 0;
     ws.eachRow((row) => row.getCell(8).value === '□ 改修済み　□ 改修計画' && boxes++);
-    expect(boxes).toBe(4); // 指導事項2件+予備2行
+    expect(boxes).toBe(5); // 指導事項2件でも最低5枠
+  });
+
+  it('keeps two spare rows when there are many findings', async () => {
+    let c = createCase(site, [a], meta);
+    for (const id of ['FM-001', 'FM-002', 'FM-003', 'NT-001', 'EQ-001', 'FR-001']) {
+      c = updateEntry(c, entryKey('a', id), { result: 'nonCompliant' });
+    }
+    const ws = (await load(c)).getWorksheet('改善計画・結果報告書')!;
+    let boxes = 0;
+    ws.eachRow((row) => row.getCell(8).value === '□ 改修済み　□ 改修計画' && boxes++);
+    expect(boxes).toBe(8); // 6件+予備2行
   });
 });

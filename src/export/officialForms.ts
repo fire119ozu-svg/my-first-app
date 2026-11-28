@@ -27,6 +27,8 @@ const PAGE_HEIGHT_PT = 700;
 /** 通知年月日・発送番号(手書き用の空欄)。同じ文字数にして位置をそろえる */
 const DATE_LINE = '令和　　年　　月　　日';
 const NUMBER_LINE = '防第　　　　　　　　号';
+/** 改善計画・結果報告書の表の最低行数(枠数) */
+const MIN_PLAN_ROWS = 5;
 const thin = { style: 'thin' as const, color: { argb: 'FF000000' } };
 
 /** 指導事項(判定「否」)1件 */
@@ -330,15 +332,13 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
   put(ws, r, 8, r, 10, '改修(計画)日', { align: 'center', border: true });
   r++;
   const multi = c.buildings.length > 1;
-  const rows = [
-    ...findings.map((f) => ({
-      no: toZenkaku(f.no),
-      title: `${multi ? `${buildingName(f.building, f.bIndex)}\n` : ''}${f.item.title}について`,
-    })),
-    // 記入例と同様に予備の空欄を2行設ける
-    { no: '', title: '' },
-    { no: '', title: '' },
-  ];
+  const filled = findings.map((f) => ({
+    no: toZenkaku(f.no),
+    title: `${multi ? `${buildingName(f.building, f.bIndex)}\n` : ''}${f.item.title}について`,
+  }));
+  // 予備の空欄を2行設け、指導事項が少なくても最低5行(枠)にする
+  const blanks = Math.max(MIN_PLAN_ROWS - filled.length, 2);
+  const rows = [...filled, ...Array.from({ length: blanks }, () => ({ no: '', title: '' }))];
   const tableRows: number[] = [];
   for (const x of rows) {
     tableRows.push(r, r + 1);
@@ -365,8 +365,9 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
   }
   const gapBeforeSign = r;
   r += 2;
+  // 担当者氏名には査察員(通知書と同じく検査員の1人目)の階級・氏名を記載する
   put(ws, r, 5, r, 6, '担当者氏名');
-  put(ws, r, 7, r, 10, '');
+  put(ws, r, 7, r, 10, c.inspectors[0] ? formatInspector(c.inspectors[0]).replace(' ', '　') : '', { align: 'center' });
   ws.getCell(r, 7).border = { bottom: thin };
   for (let col = 8; col <= 10; col++) ws.getCell(r, col).border = { bottom: thin };
 
