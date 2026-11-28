@@ -3,6 +3,7 @@ import {
   emptyOpening,
   emptyOpeningRecord,
   formatJudgement,
+  openingPhotoIds,
   openingPlace,
   isLargeOpening,
   judgeOpenings,
@@ -123,5 +124,23 @@ describe('入力フォーム', () => {
       [`opening:${o.id}:count`]: '箇所数を1以上の整数で入力してください',
       [`openingRecord:${dup2.id}:floor`]: '同じ階が2回記録されています',
     });
+  });
+
+  it('写真だけの階・開口部も残し、コメントは添付中のものだけにする', () => {
+    const o = { ...emptyOpening(), photoIds: ['w1'], photoCaptions: { w1: ' 東側 ', w9: '外した写真' } };
+    const r = recordForm({ floor: '2', photoIds: ['p1'], photoCaptions: { p1: '', p2: 'x' }, openings: [o] });
+    const { records, errors } = validateOpeningRecords([r], ['1', '2']);
+    // 窓は寸法が必要
+    expect(errors).toEqual({
+      [`opening:${o.id}:width`]: '幅を数値(cm)で入力してください',
+      [`opening:${o.id}:height`]: '高さを数値(cm)で入力してください',
+    });
+    const ok = validateOpeningRecords([{ ...r, openings: [{ ...o, width: '100', height: '100' }] }], ['1', '2']);
+    expect(ok.records[0]).toMatchObject({ photoIds: ['p1'], photoCaptions: {} });
+    expect(ok.records[0].openings[0]).toMatchObject({ photoIds: ['w1'], photoCaptions: { w1: ' 東側 ' } });
+    expect(openingPhotoIds(ok.records)).toEqual(['p1', 'w1']);
+    // 全景写真だけの階も記録として残す
+    expect(validateOpeningRecords([recordForm({ floor: '1', photoIds: ['p3'], openings: [emptyOpening()] })], ['1']).records).toHaveLength(1);
+    void records;
   });
 });

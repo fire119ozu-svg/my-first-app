@@ -197,7 +197,17 @@ describe('validateBuildingForm', () => {
       const { building, errors } = validateBuildingForm({ ...valid, openingRecords: [rec] });
       expect(errors).toEqual({});
       expect(building?.openingRecords).toEqual([
-        { id: rec.id, floor: '2', floorArea: 120, memo: '', openings: [{ id: rec.openings[0].id, direction: '', location: '', kind: 'full', width: 80, height: 130, count: 2 }] },
+        {
+          id: rec.id,
+          floor: '2',
+          floorArea: 120,
+          memo: '',
+          photoIds: [],
+          photoCaptions: {},
+          openings: [
+            { id: rec.openings[0].id, direction: '', location: '', kind: 'full', width: 80, height: 130, count: 2, photoIds: [], photoCaptions: {} },
+          ],
+        },
       ]);
       const back = toBuildingForm(building!).openingRecords;
       expect(back[0]).toMatchObject({ floor: '2', floorArea: '120', openings: [{ width: '80', height: '130', count: '2' }] });

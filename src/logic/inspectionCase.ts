@@ -68,6 +68,21 @@ export function renovationPhotoKey(buildingId: string): string {
   return `${buildingId}:__renovation__`;
 }
 
+/** 有効開口部(全景・窓)の写真を保存するときの項目キー */
+export function openingPhotoKey(buildingId: string, recordId: string, openingId?: string): string {
+  return `${buildingId}:__opening__:${recordId}${openingId ? `:${openingId}` : ''}`;
+}
+
+/** 対象物情報の入力欄に添付した写真(増改築・有効開口部の全景・窓) */
+export function buildingInfoPhotoIds(
+  b: { renovation?: { photoIds: string[] }; openingRecords?: { photoIds: string[]; openings: { photoIds: string[] }[] }[] },
+): string[] {
+  return [
+    ...(b.renovation?.photoIds ?? []),
+    ...(b.openingRecords ?? []).flatMap((r) => [...(r.photoIds ?? []), ...r.openings.flatMap((o) => o.photoIds ?? [])]),
+  ];
+}
+
 /** 表示用の棟名。棟名が未入力なら「第1棟」など */
 export function buildingName(b: BuildingInfo, index: number): string {
   return b.label.trim() || `第${index + 1}棟`;
@@ -138,7 +153,7 @@ export function removedBuildingsWithInput(c: InspectionCase, buildings: Building
   return c.buildings.filter(
     (b) =>
       !keep.has(b.id) &&
-      (checklistOf(c, b.id).some((id) => hasInput(c.entries[entryKey(b.id, id)])) || (b.renovation?.photoIds.length ?? 0) > 0),
+      (checklistOf(c, b.id).some((id) => hasInput(c.entries[entryKey(b.id, id)])) || buildingInfoPhotoIds(b).length > 0),
   );
 }
 
@@ -158,7 +173,7 @@ export function updateCaseInfo(
   const removedPhotoIds = c.buildings
     .filter((b) => !keep.has(b.id))
     .flatMap((b) => [
-      ...(b.renovation?.photoIds ?? []),
+      ...buildingInfoPhotoIds(b),
       ...checklistOf(c, b.id).flatMap((id) => c.entries[entryKey(b.id, id)]?.photoIds ?? []),
     ]);
   const entries = Object.fromEntries(Object.entries(c.entries).filter(([, e]) => keep.has(e.buildingId)));
@@ -247,7 +262,7 @@ export function setPhotoCaption(
 /** 案件内の全写真ID(棟ごとに 増改築 → 項目の並び順) */
 export function allPhotoIds(c: InspectionCase): string[] {
   return c.buildings.flatMap((b) => [
-    ...(b.renovation?.photoIds ?? []),
+    ...buildingInfoPhotoIds(b),
     ...checklistOf(c, b.id).flatMap((id) => c.entries[entryKey(b.id, id)]?.photoIds ?? []),
   ]);
 }

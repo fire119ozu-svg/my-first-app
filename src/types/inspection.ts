@@ -323,6 +323,10 @@ export interface WindowOpening {
   height: number;
   /** 箇所数 */
   count: number;
+  /** 窓の写真。画像本体は PhotoRecord */
+  photoIds: string[];
+  /** 写真ID → コメント */
+  photoCaptions: Record<string, string>;
 }
 
 /** 階ごとの有効開口部の記録(規則第5条の3) */
@@ -334,6 +338,10 @@ export interface OpeningFloorRecord {
   floorArea?: number;
   openings: WindowOpening[];
   memo: string;
+  /** 全景写真。画像本体は PhotoRecord */
+  photoIds: string[];
+  /** 写真ID → コメント */
+  photoCaptions: Record<string, string>;
 }
 
 /** 検査員(階級・氏名) */

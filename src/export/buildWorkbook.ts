@@ -606,11 +606,31 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
     const prefix = multi ? `${buildingName(b, bIndex)} ` : '';
     const reno = b.renovation;
     const renoPhotos = (reno?.photoIds ?? []).map((id) => ctx.photos.get(id)).filter((p): p is ExportPhoto => !!p);
+    const toPhotos = (ids: string[]) => ids.map((id) => ctx.photos.get(id)).filter((p): p is ExportPhoto => !!p);
+    // 有効開口部:階ごとの全景、続いて窓ごと
+    const openingGroups: Group[] = (b.openingRecords ?? []).flatMap((rec) => {
+      const floor = floorLabel(rec.floor);
+      return [
+        {
+          heading: `${prefix}有効開口部 ${floor} 全景`,
+          memo: [formatJudgement(judgeRecord(rec)), rec.memo].filter(Boolean).join('\n'),
+          photos: toPhotos(rec.photoIds ?? []),
+          captions: rec.photoCaptions ?? {},
+        },
+        ...rec.openings.map((o) => ({
+          heading: `${prefix}有効開口部 ${floor} ${openingPlace(o) || '場所未記入'}`,
+          memo: `${openingKindLabel(o.kind)} ${o.width}×${o.height}cm×${o.count}箇所`,
+          photos: toPhotos(o.photoIds ?? []),
+          captions: o.photoCaptions ?? {},
+        })),
+      ].filter((g) => g.photos.length > 0);
+    });
     return [
       // 増改築(対象物情報)の写真を各棟の最初に
       ...(renoPhotos.length
         ? [{ heading: `${prefix}増改築(対象物情報)`, memo: formatRenovation(b), photos: renoPhotos, captions: reno?.photoCaptions ?? {} }]
         : []),
+      ...openingGroups,
       ...rows
         .filter((x) => x.building === b)
         .map((x) => {

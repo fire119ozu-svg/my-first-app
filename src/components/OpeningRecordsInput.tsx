@@ -15,13 +15,62 @@ import {
   isLargeOpening,
   judgeRecordForm,
   OPENING_DIRECTIONS,
+  openingPhotoIds,
   OPENING_KINDS,
   openingPlace,
   type OpeningForm,
   type OpeningRecordForm,
 } from '../logic/openings';
+import type { BuildingFormState } from '../logic/buildingForm';
+import { openingPhotoKey } from '../logic/inspectionCase';
 import { parseNumber } from '../logic/number';
 import type { FloorKey, OpeningDirection, OpeningKind } from '../types/inspection';
+import { withCaption, withoutPhoto, type FormPhotoHandlers } from './formPhotos';
+import { PhotoStrip } from './PhotoStrip';
+
+/** 写真の追加先(棟・記録・開口部)と操作 */
+interface PhotoTarget {
+  buildingId: string;
+  photos: FormPhotoHandlers;
+}
+
+type Update<T> = (x: T) => T;
+const mapRecord =
+  (recordId: string, fn: Update<OpeningRecordForm>): Update<BuildingFormState> =>
+  (b) => ({ ...b, openingRecords: b.openingRecords.map((r) => (r.id === recordId ? fn(r) : r)) });
+const mapOpening = (recordId: string, openingId: string, fn: Update<OpeningForm>) =>
+  mapRecord(recordId, (r) => ({ ...r, openings: r.openings.map((o) => (o.id === openingId ? fn(o) : o)) }));
+
+/**
+ * 写真欄(全景・窓)。
+ * update は、最新の入力状態の該当する記録・開口部を書き換える関数を作る。
+ */
+function FormPhotoField<T extends { photoIds: string[]; photoCaptions: Record<string, string> }>(props: {
+  label: string;
+  title: string;
+  photoKey: string;
+  value: T;
+  target: PhotoTarget;
+  update: (fn: Update<T>) => Update<BuildingFormState>;
+  onChange: (v: T) => void;
+}) {
+  const { label, title, photoKey, value, target, update, onChange } = props;
+  return (
+    <div className="opening-photos">
+      <span className="sub-label">{label}</span>
+      <PhotoStrip
+        title={title}
+        photoIds={value.photoIds}
+        captions={value.photoCaptions}
+        readOnly={false}
+        pending={target.photos.pending(photoKey)}
+        onAdd={(files) => target.photos.add(photoKey, files, (b, id) => update((x) => ({ ...x, photoIds: [...x.photoIds, id] }))(b))}
+        onRemove={(id) => target.photos.remove([id], update((x) => withoutPhoto(x, id)))}
+        onCaption={(id, caption) => onChange(withCaption(value, id, caption))}
+      />
+    </div>
+  );
+}
 
 /** 開口部1つの有効寸法と扱い(例:有効 90×130cm・大型開口部) */
 function openingNote(o: OpeningForm): string | null {
@@ -37,13 +86,15 @@ function openingNote(o: OpeningForm): string | null {
 
 function OpeningRow(props: {
   index: number;
+  recordId: string;
+  target: PhotoTarget;
   value: OpeningForm;
   errors: FormErrors;
   removable: boolean;
   onChange: (v: OpeningForm) => void;
   onRemove: () => void;
 }) {
-  const { index, value: o, errors, removable, onChange, onRemove } = props;
+  const { index, recordId, target, value: o, errors, removable, onChange, onRemove } = props;
   const id = useId();
   const err = (k: string) => errors[`opening:${o.id}:${k}`];
   const label = openingPlace(o) || `開口部${index + 1}`;
@@ -90,7 +141,14 @@ function OpeningRow(props: {
           onChange={(e) => onChange({ ...o, location: e.target.value })}
         />
         {removable && (
-          <button type="button" className="inspector-remove" onClick={onRemove} aria-label={`${label}を削除`}>
+          <button
+            type="button"
+            className="inspector-remove"
+            onClick={() => {
+              if (!o.photoIds.length || confirm(`${label}を削除しますか?\n窓の写真(${o.photoIds.length}枚)も削除されます。`)) onRemove();
+            }}
+            aria-label={`${label}を削除`}
+          >
             ×
           </button>
         )}
@@ -123,12 +181,22 @@ function OpeningRow(props: {
             </p>
           ),
       )}
+      <FormPhotoField
+        label="窓の写真"
+        title={label}
+        photoKey={openingPhotoKey(target.buildingId, recordId, o.id)}
+        value={o}
+        target={target}
+        update={(fn) => mapOpening(recordId, o.id, fn)}
+        onChange={onChange}
+      />
     </div>
   );
 }
 
 function RecordCard(props: {
   record: OpeningRecordForm;
+  target: PhotoTarget;
   floors: FloorKey[];
   /** 他の記録で使っている階(選択肢から除く) */
   usedFloors: FloorKey[];
@@ -136,7 +204,7 @@ function RecordCard(props: {
   onChange: (r: OpeningRecordForm) => void;
   onRemove: () => void;
 }) {
-  const { record: r, floors, usedFloors, errors, onChange, onRemove } = props;
+  const { record: r, target, floors, usedFloors, errors, onChange, onRemove } = props;
   const id = useId();
   const err = (k: string) => errors[`openingRecord:${r.id}:${k}`];
   const name = r.floor ? floorLabel(r.floor) : '階未選択';
@@ -182,8 +250,10 @@ function RecordCard(props: {
           type="button"
           className="inspector-remove"
           onClick={() => {
-            const entered = r.floorArea.trim() || r.memo.trim() || r.openings.some((o) => o.width.trim() || o.height.trim());
-            if (!entered || confirm(`${name}の有効開口部の記録を削除しますか?`)) onRemove();
+            const photoCount = openingPhotoIds([r]).length;
+            const entered = r.floorArea.trim() || r.memo.trim() || photoCount || r.openings.some((o) => o.width.trim() || o.height.trim());
+            const msg = `${name}の有効開口部の記録を削除しますか?` + (photoCount ? `\n写真(${photoCount}枚)も削除されます。` : '');
+            if (!entered || confirm(msg)) onRemove();
           }}
           aria-label={`${name}の記録を削除`}
         >
@@ -199,15 +269,30 @@ function RecordCard(props: {
           ),
       )}
 
+      <FormPhotoField
+        label="全景写真"
+        title={`${name} 全景`}
+        photoKey={openingPhotoKey(target.buildingId, r.id)}
+        value={r}
+        target={target}
+        update={(fn) => mapRecord(r.id, fn)}
+        onChange={onChange}
+      />
+
       {r.openings.map((o, i) => (
         <OpeningRow
           key={o.id}
           index={i}
+          recordId={r.id}
+          target={target}
           value={o}
           errors={errors}
           removable={r.openings.length > 1}
           onChange={setOpening}
-          onRemove={() => onChange({ ...r, openings: r.openings.filter((x) => x.id !== o.id) })}
+          onRemove={() => {
+            onChange({ ...r, openings: r.openings.filter((x) => x.id !== o.id) });
+            target.photos.remove(o.photoIds);
+          }}
         />
       ))}
       <button
@@ -236,13 +321,16 @@ function RecordCard(props: {
 }
 
 export function OpeningRecordsInput(props: {
+  buildingId: string;
+  photos: FormPhotoHandlers;
   records: OpeningRecordForm[];
   /** 地上階の一覧 */
   floors: FloorKey[];
   errors: FormErrors;
   onChange: (v: OpeningRecordForm[]) => void;
 }) {
-  const { records, floors, errors, onChange } = props;
+  const { buildingId, photos, records, floors, errors, onChange } = props;
+  const target: PhotoTarget = { buildingId, photos };
   const hasError = Object.keys(errors).some((k) => k.startsWith('opening'));
   const [open, setOpen] = useState(false);
   // 入力に不備があるときは閉じたままにしない
@@ -286,11 +374,15 @@ export function OpeningRecordsInput(props: {
                 <RecordCard
                   key={r.id}
                   record={r}
+                  target={target}
                   floors={floors}
                   usedFloors={usedFloors.filter((f) => f !== r.floor)}
                   errors={errors}
                   onChange={(v) => onChange(records.map((x) => (x.id === r.id ? v : x)))}
-                  onRemove={() => onChange(records.filter((x) => x.id !== r.id))}
+                  onRemove={() => {
+                    onChange(records.filter((x) => x.id !== r.id));
+                    photos.remove(openingPhotoIds([r]));
+                  }}
                 />
               ))}
               {usedFloors.length < floors.length && (

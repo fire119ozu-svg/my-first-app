@@ -118,11 +118,11 @@ export type OpeningRecordForm = Omit<OpeningFloorRecord, 'floor' | 'floorArea' |
 };
 
 export function emptyOpening(kind: OpeningKind = 'sliding'): OpeningForm {
-  return { id: newId(), direction: '', location: '', kind, width: '', height: '', count: '' };
+  return { id: newId(), direction: '', location: '', kind, width: '', height: '', count: '', photoIds: [], photoCaptions: {} };
 }
 
 export function emptyOpeningRecord(floor: FloorKey | '' = ''): OpeningRecordForm {
-  return { id: newId(), floor, floorArea: '', memo: '', openings: [emptyOpening()] };
+  return { id: newId(), floor, floorArea: '', memo: '', openings: [emptyOpening()], photoIds: [], photoCaptions: {} };
 }
 
 export function toOpeningRecordForms(records: OpeningFloorRecord[]): OpeningRecordForm[] {
@@ -133,9 +133,22 @@ export function toOpeningRecordForms(records: OpeningFloorRecord[]): OpeningReco
   }));
 }
 
-const openingHasInput = (o: OpeningForm) => !!(o.direction || o.location.trim() || o.width.trim() || o.height.trim() || o.count.trim());
+const openingHasInput = (o: OpeningForm) =>
+  !!(o.direction || o.location.trim() || o.width.trim() || o.height.trim() || o.count.trim() || o.photoIds.length);
 const recordHasInput = (r: OpeningRecordForm) =>
-  !!(r.floor || r.floorArea.trim() || r.memo.trim() || r.openings.some(openingHasInput));
+  !!(r.floor || r.floorArea.trim() || r.memo.trim() || r.photoIds.length || r.openings.some(openingHasInput));
+
+type WithPhotos = { photoIds: string[]; openings?: { photoIds: string[] }[] };
+
+/** 有効開口部の記録に添付された写真ID(全景+窓) */
+export function openingPhotoIds(records: WithPhotos[]): string[] {
+  return records.flatMap((r) => [...r.photoIds, ...(r.openings ?? []).flatMap((o) => o.photoIds)]);
+}
+
+/** コメントを、添付中の写真・空でないものだけに整える */
+function cleanCaptions(photoIds: string[], captions: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(captions).filter(([id, c]) => photoIds.includes(id) && c.trim()));
+}
 
 /** 箇所数として読めるか(空欄は1、不正は null) */
 function parseOpeningCount(raw: string): number | null {
@@ -195,7 +208,17 @@ export function validateOpeningRecords(
       if (height === null) errors[`opening:${o.id}:height`] = '高さを数値(cm)で入力してください';
       if (count === null) errors[`opening:${o.id}:count`] = '箇所数を1以上の整数で入力してください';
       if (width !== null && height !== null && count !== null) {
-        openings.push({ id: o.id, direction: o.direction, location: o.location.trim(), kind: o.kind, width, height, count });
+        openings.push({
+          id: o.id,
+          direction: o.direction,
+          location: o.location.trim(),
+          kind: o.kind,
+          width,
+          height,
+          count,
+          photoIds: o.photoIds,
+          photoCaptions: cleanCaptions(o.photoIds, o.photoCaptions),
+        });
       }
     }
     records.push({
@@ -204,6 +227,8 @@ export function validateOpeningRecords(
       ...(typeof floorArea === 'number' ? { floorArea } : {}),
       openings,
       memo: r.memo.trim(),
+      photoIds: r.photoIds,
+      photoCaptions: cleanCaptions(r.photoIds, r.photoCaptions),
     });
   }
   // 階の順(下の階から)に並べる
