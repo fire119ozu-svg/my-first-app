@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyOpening, emptyOpeningRecord } from './openings';
 import {
   emptyBuildingForm,
   emptyRenovation,
@@ -188,6 +189,25 @@ describe('validateBuildingForm', () => {
     it('round-trips through the edit form', () => {
       const { building } = validateBuildingForm({ ...valid, renovation: { ...emptyRenovation(), status: 'yes', area: '120' } });
       expect(toBuildingForm(building!).renovation.area).toBe('120');
+    });
+  });
+  describe('有効開口部', () => {
+    it('validates opening records and round-trips through the edit form', () => {
+      const rec = { ...emptyOpeningRecord('2'), floorArea: '120', openings: [{ ...emptyOpening('full'), width: '80', height: '130', count: '2' }] };
+      const { building, errors } = validateBuildingForm({ ...valid, openingRecords: [rec] });
+      expect(errors).toEqual({});
+      expect(building?.openingRecords).toEqual([
+        { id: rec.id, floor: '2', floorArea: 120, memo: '', openings: [{ id: rec.openings[0].id, direction: '', location: '', kind: 'full', width: 80, height: 130, count: 2 }] },
+      ]);
+      const back = toBuildingForm(building!).openingRecords;
+      expect(back[0]).toMatchObject({ floor: '2', floorArea: '120', openings: [{ width: '80', height: '130', count: '2' }] });
+    });
+
+    it('does not allow basement floors', () => {
+      const rec = { ...emptyOpeningRecord('B1'), memo: 'x' };
+      expect(validateBuildingForm({ ...valid, openingRecords: [rec] }).errors).toEqual({
+        [`openingRecord:${rec.id}:floor`]: '階を選び直してください',
+      });
     });
   });
 });

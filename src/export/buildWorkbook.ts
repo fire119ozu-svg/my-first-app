@@ -17,7 +17,8 @@ import { addGuidanceSheet, addImprovementSheet, addNoticeSheet, collectFindings 
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
 import { buildingName, caseProgress, checklistOf, entryKey, formatInspector } from '../logic/inspectionCase';
-import type { BuildingInfo, ChecklistItem, CheckResult, FloorKey, InspectionCase } from '../types/inspection';
+import { formatJudgement, isEffectiveOpening, isLargeOpening, judgeRecord, openingKindLabel, openingPlace } from '../logic/openings';
+import type { BuildingInfo, ChecklistItem, CheckResult, FloorKey, InspectionCase, OpeningFloorRecord } from '../types/inspection';
 import {
   estimateLines,
   formatEquipment,
@@ -481,6 +482,18 @@ function addPerFloorSheet(wb: Workbook, ctx: Ctx) {
 // 5. 対象物情報
 // ---------------------------------------------------------------------------
 
+/** 有効開口部の記録(1階分):床面積・判定、開口部の一覧、メモ */
+function formatOpeningRecord(rec: OpeningFloorRecord): string {
+  const head = [rec.floorArea !== undefined ? `床面積 ${rec.floorArea.toLocaleString('ja-JP')}㎡` : '', formatJudgement(judgeRecord(rec))]
+    .filter(Boolean)
+    .join(' / ');
+  const lines = rec.openings.map((o) => {
+    const marks = [isEffectiveOpening(o) ? '' : '50cm円不可', isLargeOpening(o) ? '大型' : ''].filter(Boolean).join('・');
+    return `・${openingPlace(o) || '場所未記入'} ${openingKindLabel(o.kind)} ${o.width}×${o.height}cm×${o.count}箇所${marks ? `(${marks})` : ''}`;
+  });
+  return [head, ...lines, ...(rec.memo ? [`メモ:${rec.memo}`] : [])].join('\n');
+}
+
 function buildingRows(b: BuildingInfo): [string, string][] {
   const yesNo = (v: boolean) => (v ? 'あり' : 'なし');
   const floorCaps = floorKeys(b)
@@ -510,6 +523,7 @@ function buildingRows(b: BuildingInfo): [string, string][] {
     ]),
     ['高層建築物(31m超)', yesNo(b.isHighRise)],
     ['無窓階', yesNo(b.hasWindowlessFloor)],
+    ...(b.openingRecords ?? []).map((rec): [string, string] => [`有効開口部 ${floorLabel(rec.floor)}`, formatOpeningRecord(rec)]),
     ['特定一階段等防火対象物', b.isSingleStaircase ? '該当' : '非該当'],
     ['管理権原が複数', yesNo(b.hasMultipleOwners)],
     ['増改築の有無', formatRenovationStatus(b)],

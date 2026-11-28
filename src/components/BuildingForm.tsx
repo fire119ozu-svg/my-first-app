@@ -2,9 +2,12 @@ import { EQUIPMENT_OPTIONS, FACILITY_OPTIONS, NOTIFICATION_OPTIONS, NOTIFICATION
 import { USAGE_CATEGORIES } from '../data/usageCategories';
 import { emptyTenant, formFloorKeys, summarizeCapacity, type BuildingFormState, type FormErrors, type RenovationForm } from '../logic/buildingForm';
 import { isCompositeUsage } from '../logic/extractChecklist';
+import { floorLabel } from '../logic/floors';
+import { windowlessFloors, type OpeningRecordForm } from '../logic/openings';
 import type { UsageCategory } from '../types/inspection';
 import { FloorCapacityInput, TenantsInput } from './CapacityInputs';
 import { ChipGroup, Field, NumberInput, Section, Segmented, TextInput, Toggle } from './controls';
+import { OpeningRecordsInput } from './OpeningRecordsInput';
 import { PhotoStrip } from './PhotoStrip';
 
 /** 増改築の写真操作(保存処理は画面側で行う) */
@@ -37,6 +40,13 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos, title }
   const composite = !!form.usage && isCompositeUsage(form.usage);
   const floors = formFloorKeys(form);
   const summary = summarizeCapacity(form);
+  const windowless = windowlessFloors(form.openingRecords);
+
+  /** 有効開口部の記録で無窓階と判定される階が新たに出たら「無窓階あり」をオンにする(オフは手動のみ) */
+  const setOpeningRecords = (openingRecords: OpeningRecordForm[]) => {
+    const becameWindowless = windowless.length === 0 && windowlessFloors(openingRecords).length > 0;
+    onChange({ ...form, openingRecords, hasWindowlessFloor: form.hasWindowlessFloor || becameWindowless });
+  };
 
   return (
     <form className="building-form" onSubmit={(e) => e.preventDefault()} noValidate>
@@ -136,9 +146,25 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos, title }
         )}
       </Section>
 
+      <section className="section">
+        <div className="section-body">
+          <OpeningRecordsInput
+            records={form.openingRecords}
+            floors={floors.filter((f) => !f.startsWith('B'))}
+            errors={errors}
+            onChange={setOpeningRecords}
+          />
+        </div>
+      </section>
+
       <Section title="構造・管理">
         <Toggle label="高層建築物" description="高さ31m超" checked={form.isHighRise} onChange={(v) => set('isHighRise', v)} />
-        <Toggle label="無窓階あり" checked={form.hasWindowlessFloor} onChange={(v) => set('hasWindowlessFloor', v)} />
+        <Toggle
+          label="無窓階あり"
+          description={windowless.length ? `有効開口部の記録で無窓階:${windowless.map(floorLabel).join('・')}` : undefined}
+          checked={form.hasWindowlessFloor}
+          onChange={(v) => set('hasWindowlessFloor', v)}
+        />
         <Toggle label="特定一階段等防火対象物" description="地階・3階以上に特定用途があり屋内階段が1つ" checked={form.isSingleStaircase} onChange={(v) => set('isSingleStaircase', v)} />
         <Toggle label="管理権原が複数" description="テナントごとに権原が分かれている" checked={form.hasMultipleOwners} onChange={(v) => set('hasMultipleOwners', v)} />
       </Section>

@@ -27,6 +27,7 @@ import {
 import { processImage } from '../photos/processImage';
 import { navigate, paths } from '../router';
 import { deleteCase, deletePhoto, deletePhotosByCase, getCase, saveCase, savePhoto } from '../storage/caseStore';
+import { loadInspectors, loadOffice, storeInspectors, storeOffice } from '../storage/formDefaults';
 import { splitLegacyBuilding, type LegacyBuilding } from '../storage/migrate';
 import type { InspectionCase, Inspector, OfficeInfo } from '../types/inspection';
 
@@ -34,28 +35,6 @@ interface MetaForm {
   inspectionDate: string;
   inspectors: Inspector[];
   office: OfficeInfo;
-}
-
-/**
- * 査察員の所属・問い合わせ先は毎回同じことが多いため、前回の値を端末に覚えておき新規案件に入れる。
- * (利便性のためだけの保存。消えても入力し直せばよい)
- */
-const OFFICE_KEY = 'officeDefaults:v1';
-function loadOffice(): OfficeInfo {
-  try {
-    const raw = localStorage.getItem(OFFICE_KEY);
-    if (raw) return { department: '', phone: '', ...(JSON.parse(raw) as Partial<OfficeInfo>) };
-  } catch {
-    // 保存領域が使えない環境では空欄
-  }
-  return { department: '', phone: '' };
-}
-function storeOffice(o: OfficeInfo) {
-  try {
-    localStorage.setItem(OFFICE_KEY, JSON.stringify(o));
-  } catch {
-    // 保存できなくても入力は継続できる
-  }
 }
 
 interface Draft {
@@ -79,7 +58,8 @@ function emptyDraft(): Draft {
     caseId: newId(),
     site: emptySiteForm(),
     buildings: [emptyBuildingForm()],
-    meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }], office: loadOffice() },
+    // 所属・TEL・検査員は前回の値を自動で入れる
+    meta: { inspectionDate: today(), inspectors: loadInspectors(), office: loadOffice() },
   };
 }
 
@@ -140,6 +120,15 @@ function fromLegacyDraft(raw: string): Draft {
   };
 }
 
+/** 下書きの棟を現在の形式に(有効開口部の方角が無かった頃の下書きは方角を空欄に) */
+function fromDraftBuilding(b: BuildingFormState): BuildingFormState {
+  const f = { ...emptyBuildingForm(b.id), ...b };
+  return {
+    ...f,
+    openingRecords: f.openingRecords.map((r) => ({ ...r, openings: r.openings.map((o) => ({ ...o, direction: o.direction ?? '' })) })),
+  };
+}
+
 function loadDraft(): Draft {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
@@ -149,7 +138,7 @@ function loadDraft(): Draft {
       return {
         caseId: d.caseId ?? e.caseId,
         site: { ...e.site, ...d.site },
-        buildings: d.buildings?.length ? d.buildings.map((b) => ({ ...emptyBuildingForm(b.id), ...b })) : e.buildings,
+        buildings: d.buildings?.length ? d.buildings.map(fromDraftBuilding) : e.buildings,
         meta: { ...e.meta, ...d.meta },
       };
     }
@@ -308,7 +297,8 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     const buildings = validation.buildings.map((v) => v.building!);
     const office = { department: draft.meta.office.department.trim(), phone: draft.meta.office.phone.trim() };
     const meta = { inspectionDate: draft.meta.inspectionDate, inspectors: normalizeInspectors(draft.meta.inspectors), office };
-    if (office.department || office.phone) storeOffice(office);
+    storeOffice(office);
+    storeInspectors(meta.inspectors);
     setSaving(true);
     try {
       if (existing) {
@@ -374,7 +364,11 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
               <input id={id} type="date" value={draft.meta.inspectionDate} onChange={(e) => setMeta({ inspectionDate: e.target.value })} />
             )}
           </Field>
-          <InspectorsInput value={draft.meta.inspectors} onChange={(inspectors) => setMeta({ inspectors })} />
+          <InspectorsInput
+            value={draft.meta.inspectors}
+            onChange={(inspectors) => setMeta({ inspectors })}
+            hint="次の案件にも自動で入ります(変更・削除できます)"
+          />
           <TextInput
             label="所属"
             value={draft.meta.office.department}

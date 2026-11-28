@@ -5,19 +5,23 @@
  * - v0.1:関係者(ownerName)・立会者(案件の witness)が氏名の文字列
  * - v0.2:検査員が氏名の文字列
  * - v0.3:対象物情報が1棟のみ(building・itemIds、結果のキーが項目ID)
+ * - v0.4:棟に有効開口部の記録(openingRecords)が無い
+ * - v0.5:有効開口部に方角(direction)が無い(場所の「東面」等は方角へ移す)
  */
 import type {
   BuildingInfo,
   CheckEntry,
   InspectionCase,
+  OpeningDirection,
   PersonInfo,
   SiteInfo,
   Tenant,
   UsageCategory,
+  WindowOpening,
 } from '../types/inspection';
 
 /** 1棟のみだった頃の対象物情報 */
-export interface LegacyBuilding extends Omit<BuildingInfo, 'id' | 'label' | 'tenants' | 'floorCapacities'> {
+export interface LegacyBuilding extends Omit<BuildingInfo, 'id' | 'label' | 'tenants' | 'floorCapacities' | 'openingRecords'> {
   name: string;
   address: string;
   ownerName?: string;
@@ -63,7 +67,29 @@ export function splitLegacyBuilding(
       representative: representative ?? personFromName(ownerName),
       witness: witness ?? personFromName(legacyWitness),
     },
-    building: { ...rest, id, label: '', tenants, floorCapacities: {} },
+    building: { ...rest, id, label: '', tenants, floorCapacities: {}, openingRecords: [] },
+  };
+}
+
+const DIRECTIONS: OpeningDirection[] = ['東', '西', '南', '北', '北東', '北西', '南東', '南西'];
+
+/** 方角の無い開口部(v0.5以前)。場所が「東面」「東」等だけなら方角へ移す */
+function withDirection(o: WindowOpening): WindowOpening {
+  if (typeof o.direction === 'string') return o;
+  const m = o.location.trim().match(/^(北東|北西|南東|南西|東|西|南|北)面?(?:[ 　]+(.*))?$/);
+  const d = m?.[1] as OpeningDirection | undefined;
+  return d && DIRECTIONS.includes(d) ? { ...o, direction: d, location: (m?.[2] ?? '').trim() } : { ...o, direction: '' };
+}
+
+const needsMigration = (b: BuildingInfo) =>
+  !Array.isArray(b.openingRecords) || b.openingRecords.some((r) => r.openings.some((o) => typeof o.direction !== 'string'));
+
+/** 有効開口部の記録が無い棟(v0.4以前)に空の記録を足し、方角の無い開口部を変換する */
+function withOpeningRecords(b: BuildingInfo): BuildingInfo {
+  if (!needsMigration(b)) return b;
+  return {
+    ...b,
+    openingRecords: (b.openingRecords ?? []).map((r) => ({ ...r, openings: r.openings.map(withDirection) })),
   };
 }
 
@@ -73,7 +99,14 @@ export function migrateCase(stored: InspectionCase): InspectionCase {
     typeof x === 'string' ? { rank: '', name: x } : (x as InspectionCase['inspectors'][number]),
   );
   if (!raw.building) {
-    return inspectors.some((x, i) => x !== raw.inspectors[i]) ? { ...raw, inspectors } : stored;
+    const changedInspectors = inspectors.some((x, i) => x !== raw.inspectors[i]);
+    const needsOpenings = raw.buildings.some(needsMigration);
+    if (!changedInspectors && !needsOpenings) return stored;
+    return {
+      ...raw,
+      inspectors,
+      buildings: needsOpenings ? raw.buildings.map(withOpeningRecords) : raw.buildings,
+    };
   }
 
   // 1棟のみの案件を、敷地+棟の形式へ
