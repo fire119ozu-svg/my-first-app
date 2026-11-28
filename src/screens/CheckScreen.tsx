@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ExportSheet } from '../components/ExportSheet';
 import { PhotoStrip } from '../components/PhotoStrip';
+import { ReferenceSheet } from '../components/ReferenceSheet';
 import { Header, HeaderLink } from '../components/Header';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { groupByCategory } from '../logic/extractChecklist';
@@ -52,6 +53,7 @@ export function CheckScreen({ caseId }: { caseId: string }) {
   const [filter, setFilter] = useState<Filter>('all');
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [exporting, setExporting] = useState(false);
+  const [showingRefs, setShowingRefs] = useState(false);
   /** 項目ごとの処理中の写真枚数 */
   const [pendingPhotos, setPendingPhotos] = useState<Record<string, number>>({});
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -291,10 +293,11 @@ export function CheckScreen({ caseId }: { caseId: string }) {
         </section>
       </main>
 
-      <footer className="action-bar">
-        <span className="action-count">
-          進捗 <strong>{pct}</strong>%
-        </span>
+      {/* 進捗はヘッダーに表示しているため、下部はボタンのみ */}
+      <footer className="action-bar buttons">
+        <button type="button" className="secondary-btn" onClick={() => setShowingRefs(true)}>
+          参考資料
+        </button>
         <button
           type="button"
           className={readOnly ? 'primary-btn' : 'secondary-btn'}
@@ -308,6 +311,8 @@ export function CheckScreen({ caseId }: { caseId: string }) {
           </button>
         )}
       </footer>
+
+      {showingRefs && <ReferenceSheet onClose={() => setShowingRefs(false)} />}
 
       {exporting && (
         <ExportSheet
