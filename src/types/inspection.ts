@@ -240,6 +240,13 @@ export type ItemFieldValue = string | Record<FloorKey, string>;
 // 検査案件・チェック結果
 // ---------------------------------------------------------------------------
 
+/** 検査員(階級・氏名) */
+export interface Inspector {
+  /** 消防吏員の階級(例:消防司令補)。未選択は空文字 */
+  rank: string;
+  name: string;
+}
+
 /** 判定:適 / 否 / 該当なし */
 export type CheckResult = 'compliant' | 'nonCompliant' | 'notApplicable';
 
@@ -274,7 +281,7 @@ export interface InspectionCase {
   /** 検査日(YYYY-MM-DD) */
   inspectionDate: string;
   /** 検査員 */
-  inspectors: string[];
+  inspectors: Inspector[];
   building: BuildingInfo;
   /** 抽出された項目IDの並び(抽出時点のスナップショット) */
   itemIds: string[];

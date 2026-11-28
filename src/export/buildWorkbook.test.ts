@@ -14,7 +14,7 @@ const building: BuildingInfo = {
 };
 
 function sampleCase(): InspectionCase {
-  let c = createCase(building, { inspectionDate: '2026-11-27', inspectors: ['山田', '佐藤'] });
+  let c = createCase(building, { inspectionDate: '2026-11-27', inspectors: [{ rank: '消防司令補', name: '山田' }, { rank: '消防士', name: '佐藤' }] });
   c = updateEntry(c, 'FM-001', { result: 'compliant' });
   c = updateEntry(c, 'FU-001', { result: 'nonCompliant', memo: 'グリスフィルターに油脂付着' });
   c = updateEntry(c, 'EQ-001', { result: 'compliant' });
@@ -58,7 +58,7 @@ describe('buildWorkbook', () => {
     const ws = (await roundTrip(c)).getWorksheet('チェックリスト')!;
     const all = texts(ws).join('|');
     expect(all).toContain('追手筋テナントビル');
-    expect(all).toContain('山田、佐藤');
+    expect(all).toContain('消防司令補 山田、消防士 佐藤');
     expect(all).toContain('代表者|代表者|代表取締役 高知太郎');
     expect(all).toContain('立会者|店長 土佐花子');
     expect(all).toContain('3ロ項 飲食店');

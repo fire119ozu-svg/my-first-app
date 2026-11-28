@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BuildingForm } from '../components/BuildingForm';
-import { Field, PersonInput, Section, TextInput } from '../components/controls';
+import { Field, PersonInput, Section } from '../components/controls';
 import { Header, HeaderLink } from '../components/Header';
+import { InspectorsInput } from '../components/InspectorsInput';
 import { emptyBuildingForm, toBuildingForm, validateBuildingForm, type BuildingFormState } from '../logic/buildingForm';
 import { extractChecklistItems } from '../logic/extractChecklist';
-import { createCase, parseInspectors, today, updateBuilding } from '../logic/inspectionCase';
+import { createCase, normalizeInspectors, parseInspectors, today, updateBuilding } from '../logic/inspectionCase';
 import { navigate, paths } from '../router';
 import { deleteCase, getCase, saveCase } from '../storage/caseStore';
-import type { InspectionCase } from '../types/inspection';
+import type { InspectionCase, Inspector } from '../types/inspection';
 
 interface MetaForm {
   inspectionDate: string;
-  inspectors: string;
+  inspectors: Inspector[];
 }
 
 interface Draft {
@@ -28,11 +29,11 @@ const DRAFT_KEY = 'newCaseDraft:v1';
 /** 旧形式の下書きに含まれていた項目 */
 interface LegacyDraft {
   form?: { ownerName?: string };
-  meta?: { witness?: string };
+  meta?: { witness?: string; inspectors?: string };
 }
 
 function emptyDraft(): Draft {
-  return { form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: '' } };
+  return { form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }] } };
 }
 
 function loadDraft(): Draft {
@@ -46,7 +47,15 @@ function loadDraft(): Draft {
       if (d.form?.ownerName && !form.representative.name) form.representative = { title: '', name: d.form.ownerName };
       if (d.meta?.witness && !form.witness.name) form.witness = { title: '', name: d.meta.witness };
       delete (form as { ownerName?: string }).ownerName;
-      return { form, meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors: d.meta?.inspectors ?? '' } };
+      // 旧形式の下書き(検査員が「、」区切りの文字列)を移行
+      const saved = d.meta?.inspectors as Inspector[] | string | undefined;
+      const inspectors =
+        typeof saved === 'string'
+          ? parseInspectors(saved).map((name) => ({ rank: '', name }))
+          : Array.isArray(saved) && saved.length
+            ? saved
+            : e.meta.inspectors;
+      return { form, meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors } };
     }
   } catch {
     // 保存領域が使えない環境では空のフォームから開始
@@ -78,7 +87,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
       setExisting(c);
       setDraft({
         form: toBuildingForm(c.building),
-        meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.join('、') },
+        meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.length ? c.inspectors : [{ rank: '', name: '' }] },
       });
     });
   }, [caseId, isEdit]);
@@ -114,7 +123,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     }
     const meta = {
       inspectionDate: draft.meta.inspectionDate,
-      inspectors: parseInspectors(draft.meta.inspectors),
+      inspectors: normalizeInspectors(draft.meta.inspectors),
     };
     setSaving(true);
     try {
@@ -173,7 +182,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
               <input id={id} type="date" value={draft.meta.inspectionDate} onChange={(e) => setMeta({ inspectionDate: e.target.value })} />
             )}
           </Field>
-          <TextInput label="検査員" value={draft.meta.inspectors} onChange={(v) => setMeta({ inspectors: v })} placeholder="複数は「、」で区切る" />
+          <InspectorsInput value={draft.meta.inspectors} onChange={(inspectors) => setMeta({ inspectors })} />
           {/* 対象物情報の立会者と同じ値を編集する(どちらで入力しても両方に反映) */}
           <PersonInput
             label="立会者"

@@ -17,7 +17,21 @@ function personFromName(name: string | undefined): PersonInfo | undefined {
   return n ? { title: '', name: n } : undefined;
 }
 
+/** v0.2:検査員が氏名の文字列だった → { rank, name } へ */
+function migrateInspectors(c: InspectionCase): InspectionCase {
+  const list = c.inspectors as unknown[];
+  if (!list.some((x) => typeof x === 'string')) return c;
+  return {
+    ...c,
+    inspectors: list.map((x) => (typeof x === 'string' ? { rank: '', name: x } : (x as InspectionCase['inspectors'][number]))),
+  };
+}
+
 export function migrateCase(stored: InspectionCase): InspectionCase {
+  return migratePeople(migrateInspectors(stored));
+}
+
+function migratePeople(stored: InspectionCase): InspectionCase {
   const legacy = stored as InspectionCase & Partial<LegacyFields>;
   const { ownerName, ...building } = legacy.building as InspectionCase['building'] & LegacyFields['building'];
   const { witness, ...rest } = legacy;

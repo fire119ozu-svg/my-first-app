@@ -32,4 +32,13 @@ describe('migrateCase', () => {
     expect(m.building.representative).toBeUndefined();
     expect(m.building.witness).toBeUndefined();
   });
+
+  it('converts legacy inspector name strings to { rank, name }', () => {
+    const current = createCase(building, { inspectionDate: '2026-11-27', inspectors: [] });
+    const legacy = { ...current, inspectors: ['山田', '佐藤'] } as unknown as InspectionCase;
+    expect(migrateCase(legacy).inspectors).toEqual([
+      { rank: '', name: '山田' },
+      { rank: '', name: '佐藤' },
+    ]);
+  });
 });

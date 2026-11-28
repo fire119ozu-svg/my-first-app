@@ -11,7 +11,7 @@
 import type ExcelJS from 'exceljs';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
-import { caseProgress } from '../logic/inspectionCase';
+import { caseProgress, formatInspector } from '../logic/inspectionCase';
 import type { ChecklistItem, CheckResult, FloorKey, InspectionCase } from '../types/inspection';
 import {
   estimateLines,
@@ -162,7 +162,7 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
   // 案件情報(左:A-B見出し/C-D値、右:E見出し/F-H値)
   const info: [string, string, string, string][] = [
     ['対象物名称', b.name, '検査日', c.inspectionDate],
-    ['所在地', b.address || '', '検査員', c.inspectors.join('、')],
+    ['所在地', b.address || '', '検査員', c.inspectors.map(formatInspector).join('、')],
     ['代表者', formatPerson(b.representative), '立会者', formatPerson(b.witness)],
     ['用途', formatUsage(b), '区分', formatSpecified(b)],
     ['延べ面積', `${b.totalFloorArea.toLocaleString('ja-JP')}㎡`, '階数', formatFloors(b)],

@@ -5,6 +5,8 @@ import {
   allPhotoIds,
   caseProgress,
   createCase,
+  formatInspector,
+  normalizeInspectors,
   parseInspectors,
   removeEntryPhoto,
   setPhotoCaption,
@@ -20,7 +22,7 @@ const base: BuildingInfo = {
   isHighRise: false, hasWindowlessFloor: false, isSingleStaircase: false, hasMultipleOwners: false,
   installedEquipment: [], facilities: ['kitchen'], notifications: {},
 };
-const meta = { inspectionDate: '2026-11-27', inspectors: ['山田'] };
+const meta = { inspectionDate: '2026-11-27', inspectors: [{ rank: '消防士長', name: '山田' }] };
 
 describe('inspectionCase', () => {
   it('creates a case with extracted items', () => {
@@ -100,6 +102,22 @@ describe('inspectionCase', () => {
     c = addEntryPhoto(c, 'FU-001', 'p1');
     const after = updateBuilding(c, { ...base, facilities: [] }, meta);
     expect(after.itemIds).toContain('FU-001');
+  });
+
+  it('formats and normalizes inspectors', () => {
+    expect(formatInspector({ rank: '消防司令補', name: '消防太郎' })).toBe('消防司令補 消防太郎');
+    expect(formatInspector({ rank: '', name: '消防太郎' })).toBe('消防太郎');
+    expect(formatInspector({ rank: '消防士', name: ' ' })).toBe('消防士');
+    expect(
+      normalizeInspectors([
+        { rank: ' 消防士長 ', name: ' 山田 ' },
+        { rank: '', name: '' },
+        { rank: '', name: '佐藤' },
+      ]),
+    ).toEqual([
+      { rank: '消防士長', name: '山田' },
+      { rank: '', name: '佐藤' },
+    ]);
   });
 
   it('parses inspectors and formats local date', () => {

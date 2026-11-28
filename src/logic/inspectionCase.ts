@@ -8,13 +8,14 @@ import type {
   CheckEntry,
   CheckResult,
   InspectionCase,
+  Inspector,
   ItemFieldValue,
 } from '../types/inspection';
 import { extractChecklistItems, sortChecklistItems } from './extractChecklist';
 
 export interface CaseMeta {
   inspectionDate: string;
-  inspectors: string[];
+  inspectors: Inspector[];
 }
 
 export function newId(): string {
@@ -28,7 +29,19 @@ export function today(now = new Date()): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
 
-/** 「山田、佐藤」「山田,佐藤」「山田 佐藤」を配列に */
+/** 「消防司令補 消防太郎」(階級のみ・氏名のみも可) */
+export function formatInspector(i: Inspector): string {
+  return [i.rank, i.name].map((x) => x.trim()).filter(Boolean).join(' ');
+}
+
+/** 前後の空白を除き、階級・氏名とも空の行を除く */
+export function normalizeInspectors(rows: Inspector[]): Inspector[] {
+  return rows
+    .map((r) => ({ rank: r.rank.trim(), name: r.name.trim() }))
+    .filter((r) => r.rank || r.name);
+}
+
+/** 旧形式(「山田、佐藤」の文字列)を配列に */
 export function parseInspectors(raw: string): string[] {
   return raw
     .split(/[、,，\s]+/)
