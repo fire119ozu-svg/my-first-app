@@ -860,3 +860,17 @@ fieldset.item-field > legend + * { clear: both; }
 .doc-toolbar .viewer-btn { min-width: 52px; font-size: 1.2rem; }
 .doc-zoom { min-width: 3.5em; text-align: center; font-variant-numeric: tabular-nums; }
 .doc-page { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ---------- PDF表示機能の準備状況 ---------- */
+.pdf-notice {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-surface);
+  font-size: 0.85rem;
+}
+.pdf-notice p { margin: 0; }
+.pdf-notice.warn { background: #fff4e0; color: var(--color-warn); }
+.pdf-notice .secondary-btn { justify-self: start; min-height: 40px; }

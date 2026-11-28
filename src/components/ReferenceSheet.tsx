@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { newId } from '../logic/inspectionCase';
 import { processImage } from '../photos/processImage';
 import { categoriesOf, describe, groupReferences, kindOf, titleFromFileName, UNCATEGORIZED } from '../references/library';
-import { countPdfPages, PdfPasswordError } from '../references/pdf';
+import { countPdfPages, ensurePdfSupport, PdfPasswordError } from '../references/pdf';
 import { deleteReference, listReferences, saveReference } from '../storage/caseStore';
 import type { ReferenceRecord } from '../types/inspection';
 import { DocViewer } from './DocViewer';
@@ -21,6 +21,14 @@ function importErrorMessage(name: string, e: unknown): string {
   if (e instanceof PdfPasswordError) return `「${name}」:${e.message}`;
   return `「${name}」:取り込めませんでした(${e instanceof Error ? e.message : String(e)})`;
 }
+
+/**
+ * PDF表示機能の状態。
+ * checking: 取得済みか確認中 / downloading: 取得中 / ready: 利用可 / offline: 未取得で電波なし / error: 取得失敗
+ */
+type PdfSupport = { state: 'checking' | 'ready' | 'offline' | 'error' } | { state: 'downloading'; ratio: number };
+
+const PDF_NOT_READY = 'PDFの表示機能をまだ読み込んでいません。電波のある場所で参考資料を開き直してください。';
 
 async function toRecord(file: File): Promise<ReferenceRecord> {
   const kind = kindOf(file);
@@ -43,6 +51,17 @@ export function ReferenceSheet({ onClose }: { onClose: () => void }) {
   const [importing, setImporting] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
   const input = useRef<HTMLInputElement>(null);
+  const [pdfSupport, setPdfSupport] = useState<PdfSupport>({ state: 'checking' });
+
+  // PDF表示機能(約2MB)は初めて参考資料を開いたときに取得する。取得済みなら通信しない
+  const preparePdf = () => {
+    setPdfSupport({ state: 'checking' });
+    ensurePdfSupport((ratio) => setPdfSupport({ state: 'downloading', ratio }))
+      .then(() => setPdfSupport({ state: 'ready' }))
+      .catch(() => setPdfSupport({ state: navigator.onLine ? 'error' : 'offline' }));
+  };
+  useEffect(preparePdf, []);
+  const pdfReady = pdfSupport.state === 'ready';
 
   const reload = () =>
     listReferences()
@@ -73,6 +92,7 @@ export function ReferenceSheet({ onClose }: { onClose: () => void }) {
     // 端末のメモリを圧迫しないよう1件ずつ処理する
     for (const f of files) {
       try {
+        if (kindOf(f) === 'pdf' && !pdfReady) throw new Error(PDF_NOT_READY);
         const r = await toRecord(f);
         await saveReference(r);
         added.push(r);
@@ -118,7 +138,11 @@ export function ReferenceSheet({ onClose }: { onClose: () => void }) {
         </button>
       </header>
 
-      {doc ? (
+      {doc && doc.kind === 'pdf' && !pdfReady ? (
+        <div className="ref-body">
+          <PdfSupportNotice support={pdfSupport} onRetry={preparePdf} />
+        </div>
+      ) : doc ? (
         <DocViewer key={doc.id} doc={doc} />
       ) : (
         <div className="ref-body">
@@ -139,6 +163,7 @@ export function ReferenceSheet({ onClose }: { onClose: () => void }) {
             }}
           />
           <p className="muted small ref-note">資料はこの端末内にだけ保存され、外部には送信されません。</p>
+          <PdfSupportNotice support={pdfSupport} onRetry={preparePdf} />
 
           {errors.map((m) => (
             <p key={m} className="error-banner" role="alert">
@@ -200,6 +225,36 @@ export function ReferenceSheet({ onClose }: { onClose: () => void }) {
       )}
     </div>
   );
+}
+
+/** PDF表示機能の取得状況(取得済み・確認中は何も表示しない) */
+function PdfSupportNotice({ support, onRetry }: { support: PdfSupport; onRetry: () => void }) {
+  if (support.state === 'downloading') {
+    const pct = Math.round(support.ratio * 100);
+    return (
+      <div className="pdf-notice" role="status">
+        <span>PDFの表示機能を準備しています…{pct}%(初回のみ・約2MB)</span>
+        <div className="progress" aria-hidden="true">
+          <div className="progress-bar" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  }
+  if (support.state === 'offline' || support.state === 'error') {
+    return (
+      <div className="pdf-notice warn" role="alert">
+        <p>
+          {support.state === 'offline'
+            ? 'PDFを使うには、電波のある場所で一度この画面を開いてください(初回のみ・約2MB)。画像の資料は今すぐ使えます。'
+            : 'PDFの表示機能を読み込めませんでした。電波の状態を確認して再試行してください。'}
+        </p>
+        <button type="button" className="secondary-btn" onClick={onRetry}>
+          再試行
+        </button>
+      </div>
+    );
+  }
+  return null;
 }
 
 function EditDialog(props: {
