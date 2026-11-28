@@ -24,6 +24,9 @@ const COL_WIDTH = 8.6;
 const LINE = 16;
 /** A4縦の印刷範囲の高さ(pt)の目安(余白・ヘッダーを除く) */
 const PAGE_HEIGHT_PT = 700;
+/** 通知年月日・発送番号(手書き用の空欄)。同じ文字数にして位置をそろえる */
+const DATE_LINE = '令和　　年　　月　　日';
+const NUMBER_LINE = '防第　　　　　　　　号';
 const thin = { style: 'thin' as const, color: { argb: 'FF000000' } };
 
 /** 指導事項(判定「否」)1件 */
@@ -102,6 +105,28 @@ function box(ws: Worksheet, r1: number, c1: number, r2: number, c2: number) {
   }
 }
 
+/** 1〜last 行の高さの合計(pt) */
+function usedHeight(ws: Worksheet, last: number): number {
+  let sum = 0;
+  for (let r = 1; r <= last; r++) sum += ws.getRow(r).height ?? LINE + 2;
+  return sum;
+}
+
+/**
+ * 用紙(A4縦)の余りを指定した行に重みに応じて配分し、内容を用紙全体にバランスよく配置する。
+ * 内容が1ページを超える場合は何もしない。
+ */
+function spreadToPage(ws: Worksheet, last: number, spacers: [row: number, weight: number][]) {
+  const extra = PAGE_HEIGHT_PT - usedHeight(ws, last);
+  if (extra <= 0) return;
+  const total = spacers.reduce((a, [, w]) => a + w, 0);
+  for (const [row, w] of spacers) {
+    const h = ws.getRow(row).height ?? LINE + 2;
+    // Excel の行の高さの上限は409pt
+    ws.getRow(row).height = Math.min(400, h + (extra * w) / total);
+  }
+}
+
 function height(ws: Worksheet, r: number, lines: number) {
   ws.getRow(r).height = Math.max(LINE + 2, lines * LINE + 4);
 }
@@ -130,8 +155,9 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
   const date = toWareki(c.inspectionDate);
 
   put(ws, 1, 1, 1, 3, '様式第4号');
-  put(ws, 2, 7, 2, 10, '防第　　　　号', { align: 'right' });
-  put(ws, 3, 7, 3, 10, '令和　　年　　月　　日', { align: 'right' });
+  // 発送番号と日付は同じ文字数にして、左右の端をそろえる
+  put(ws, 2, 7, 2, 10, NUMBER_LINE, { align: 'right' });
+  put(ws, 3, 7, 3, 10, DATE_LINE, { align: 'right' });
 
   // 名宛人(関係者)
   put(ws, 5, 1, 5, 6, site.address);
@@ -175,6 +201,25 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
   put(ws, 22, 1, 24, 1, '備\n考', { align: 'center', valign: 'top', border: true });
   put(ws, 22, 2, 24, 10, '', { border: true });
   [22, 23, 24].forEach((r) => height(ws, r, 1.5));
+
+  // 余白を各ブロックの間と枠内に配分して、用紙全体に配置する(記入例と同じバランス)
+  spreadToPage(ws, 24, [
+    [4, 2], // 日付と名宛人の間
+    [8, 1.5], // 名宛人と所属の間
+    [11, 2.5], // 標題の前
+    [13, 1.5], // 標題の後
+    [14, 0.5],
+    [15, 0.5],
+    [16, 0.5],
+    [17, 1.5], // 本文枠の前
+    [18, 2], // 本文枠
+    [19, 0.5],
+    [20, 0.5],
+    [21, 0.5],
+    [22, 1], // 備考欄
+    [23, 1],
+    [24, 1],
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +315,7 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
     put(ws, r, 7, r, 10, v);
     r++;
   }
+  const gapBeforeLead = r;
   r++;
   put(ws, r, 1, r, 10, `　${toWareki(c.inspectionDate)}の消防法第４条に基づく指導事項の改修について、下記のとおり報告します。`);
   r++;
@@ -290,7 +336,9 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
     { no: '', title: '' },
     { no: '', title: '' },
   ];
+  const tableRows: number[] = [];
   for (const x of rows) {
+    tableRows.push(r, r + 1);
     put(ws, r, 1, r + 1, 1, x.no, { align: 'center', valign: 'top', border: true });
     put(ws, r, 2, r + 1, 4, x.title, { valign: 'top', border: true });
     put(ws, r, 5, r + 1, 7, '', { border: true });
@@ -312,11 +360,21 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
     put(ws, r, 1, r, 10, n, { size: 9.5 });
     r++;
   }
+  const gapBeforeSign = r;
   r += 2;
   put(ws, r, 5, r, 6, '担当者氏名');
   put(ws, r, 7, r, 10, '');
   ws.getCell(r, 7).border = { bottom: thin };
   for (let col = 8; col <= 10; col++) ws.getCell(r, col).border = { bottom: thin };
+
+  // 余白をブロックの間と表の行(記入欄)に配分して、用紙全体に配置する
+  spreadToPage(ws, r, [
+    [3, 1], // 標題と日付の間
+    [5, 2], // 宛先と報告者欄の間
+    [gapBeforeLead, 2],
+    ...tableRows.map((row): [number, number] => [row, 0.6]),
+    [gapBeforeSign, 2],
+  ]);
 }
 
 /** 1 → 1 (全角) */

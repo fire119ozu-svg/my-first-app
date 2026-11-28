@@ -54,7 +54,11 @@ describe('official forms', () => {
     const t = texts((await load(c)).getWorksheet('査察結果通知書')!);
     const all = t.join('|');
     expect(t).toContain('様式第4号');
-    expect(t).toContain('防第　　　　号');
+    // 発送番号と日付は同じ文字数(右寄せで左右の端がそろう)
+    const no = t.find((x) => x.startsWith('防第'))!;
+    const date = t.find((x) => x.startsWith('令和') && x.endsWith('日') && x.length < 15)!;
+    expect(no).toMatch(/^防第　+号$/);
+    expect(no.length).toBe(date.length);
     expect(t).toContain('高知市〇〇町1番1号');
     expect(t).toContain('〇〇株式会社');
     expect(t).toContain('代表取締役　高知太郎　　様');
