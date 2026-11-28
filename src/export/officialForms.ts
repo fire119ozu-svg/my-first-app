@@ -365,8 +365,9 @@ export function addImprovementSheet(wb: ExcelJS.Workbook, c: InspectionCase, fin
   }
   const gapBeforeSign = r;
   r += 2;
+  // 担当者氏名には査察員(通知書と同じく検査員の1人目)の氏名を記載する
   put(ws, r, 5, r, 6, '担当者氏名');
-  put(ws, r, 7, r, 10, '');
+  put(ws, r, 7, r, 10, c.inspectors[0]?.name ?? '', { align: 'center' });
   ws.getCell(r, 7).border = { bottom: thin };
   for (let col = 8; col <= 10; col++) ws.getCell(r, col).border = { bottom: thin };
 
