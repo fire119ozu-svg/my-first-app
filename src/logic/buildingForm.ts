@@ -2,17 +2,25 @@
  * 対象物情報入力フォームの状態と検証。
  * 数値欄は入力途中の空欄を許すため文字列で保持し、検証時に BuildingInfo へ変換する。
  */
-import type { BuildingInfo, PersonInfo, UsageCategory } from '../types/inspection';
+import type { BuildingInfo, PersonInfo, RenovationInfo, UsageCategory } from '../types/inspection';
 import { isCompositeUsage } from './extractChecklist';
 
 export const NUMERIC_FIELDS = ['totalFloorArea', 'floorsAbove', 'floorsBelow', 'capacity'] as const;
 export type NumericField = (typeof NUMERIC_FIELDS)[number];
 
-export type BuildingFormState = Omit<BuildingInfo, NumericField | 'usage' | 'representative' | 'witness'> & {
+/** 増改築の入力状態(面積は入力途中を許すため文字列) */
+export type RenovationForm = Omit<RenovationInfo, 'area'> & { area: string };
+
+export type BuildingFormState = Omit<BuildingInfo, NumericField | 'usage' | 'representative' | 'witness' | 'renovation'> & {
   usage: UsageCategory | '';
   representative: PersonInfo;
   witness: PersonInfo;
+  renovation: RenovationForm;
 } & Record<NumericField, string>;
+
+export function emptyRenovation(): RenovationForm {
+  return { status: null, location: '', area: '', period: '', photoIds: [], photoCaptions: {} };
+}
 
 const emptyPerson = (): PersonInfo => ({ title: '', name: '' });
 
@@ -24,7 +32,7 @@ export function normalizePerson(p: PersonInfo | undefined): PersonInfo | undefin
   return title || name ? { title, name } : undefined;
 }
 
-export type FormField = keyof BuildingFormState;
+export type FormField = keyof BuildingFormState | 'renovationArea';
 export type FormErrors = Partial<Record<FormField, string>>;
 
 export function emptyBuildingForm(): BuildingFormState {
@@ -34,6 +42,7 @@ export function emptyBuildingForm(): BuildingFormState {
     representative: emptyPerson(),
     witness: emptyPerson(),
     usage: '',
+    renovation: emptyRenovation(),
     subUsages: [],
     totalFloorArea: '',
     floorsAbove: '',
@@ -54,6 +63,9 @@ export function toBuildingForm(b: BuildingInfo): BuildingFormState {
     ...b,
     representative: b.representative ?? emptyPerson(),
     witness: b.witness ?? emptyPerson(),
+    renovation: b.renovation
+      ? { ...b.renovation, area: b.renovation.area === undefined ? '' : String(b.renovation.area) }
+      : emptyRenovation(),
     totalFloorArea: String(b.totalFloorArea),
     floorsAbove: String(b.floorsAbove),
     floorsBelow: String(b.floorsBelow),
@@ -103,6 +115,14 @@ export function validateBuildingForm(form: BuildingFormState): {
     }
   }
 
+  const r = form.renovation;
+  let renovationArea: number | undefined;
+  if (r.status === 'yes' && r.area.trim()) {
+    const v = parseNumber(r.area);
+    if (v === null) errors.renovationArea = '増築面積を数値で入力してください';
+    else renovationArea = v;
+  }
+
   if (Object.keys(errors).length > 0 || !form.usage) return { building: null, errors };
 
   return {
@@ -112,10 +132,31 @@ export function validateBuildingForm(form: BuildingFormState): {
       address: form.address.trim(),
       representative: normalizePerson(form.representative),
       witness: normalizePerson(form.witness),
+      renovation: normalizeRenovation(r, renovationArea),
       usage: form.usage,
       subUsages: isCompositeUsage(form.usage) ? form.subUsages : [],
       ...nums,
     },
     errors: {},
+  };
+}
+
+/**
+ * 増改築の入力を保存用に整える。
+ * 「無」の場合は場所・面積・時期を持たない(写真は有無に関わらず残す)。何も入力が無ければ undefined。
+ */
+function normalizeRenovation(r: RenovationForm, area: number | undefined): RenovationInfo | undefined {
+  if (r.status === null && r.photoIds.length === 0) return undefined;
+  const yes = r.status === 'yes';
+  const captions = Object.fromEntries(
+    Object.entries(r.photoCaptions).filter(([id, c]) => r.photoIds.includes(id) && c.trim()),
+  );
+  return {
+    status: r.status,
+    location: yes ? r.location.trim() : '',
+    ...(yes && area !== undefined ? { area } : {}),
+    period: yes ? r.period.trim() : '',
+    photoIds: r.photoIds,
+    photoCaptions: captions,
   };
 }

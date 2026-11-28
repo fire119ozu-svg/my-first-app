@@ -1,9 +1,22 @@
 import { EQUIPMENT_OPTIONS, FACILITY_OPTIONS, NOTIFICATION_OPTIONS, NOTIFICATION_STATUS_OPTIONS } from '../data/labels';
 import { USAGE_CATEGORIES } from '../data/usageCategories';
-import type { BuildingFormState, FormErrors } from '../logic/buildingForm';
+import type { BuildingFormState, FormErrors, RenovationForm } from '../logic/buildingForm';
 import { isCompositeUsage } from '../logic/extractChecklist';
 import type { UsageCategory } from '../types/inspection';
 import { ChipGroup, Field, NumberInput, PersonInput, Section, Segmented, TextInput, Toggle } from './controls';
+import { PhotoStrip } from './PhotoStrip';
+
+/** 増改築の写真操作(保存処理は画面側で行う) */
+export interface RenovationPhotoHandlers {
+  pending: number;
+  onAdd: (files: File[]) => void;
+  onRemove: (photoId: string) => void;
+}
+
+const RENOVATION_OPTIONS: { value: 'yes' | 'no'; label: string }[] = [
+  { value: 'yes', label: '有' },
+  { value: 'no', label: '無' },
+];
 
 /** 複合用途の構成用途として選べるもの(16項以降を除く) */
 const SUB_USAGE_OPTIONS = USAGE_CATEGORIES.filter(
@@ -14,11 +27,14 @@ interface Props {
   form: BuildingFormState;
   errors: FormErrors;
   onChange: (next: BuildingFormState) => void;
+  renovationPhotos: RenovationPhotoHandlers;
 }
 
-export function BuildingForm({ form, errors, onChange }: Props) {
+export function BuildingForm({ form, errors, onChange, renovationPhotos }: Props) {
   const set = <K extends keyof BuildingFormState>(key: K, value: BuildingFormState[K]) =>
     onChange({ ...form, [key]: value });
+  const reno = form.renovation;
+  const setReno = (patch: Partial<RenovationForm>) => set('renovation', { ...reno, ...patch });
 
   return (
     <form className="building-form" onSubmit={(e) => e.preventDefault()} noValidate>
@@ -57,6 +73,49 @@ export function BuildingForm({ form, errors, onChange }: Props) {
             {errors.subUsages && <p className="field-error">{errors.subUsages}</p>}
           </div>
         )}
+
+        <div className="field renovation">
+          <span className="field-label">増改築の有無</span>
+          <Segmented
+            ariaLabel="増改築の有無"
+            options={RENOVATION_OPTIONS}
+            value={reno.status ?? undefined}
+            // 選択中をもう一度押すと未選択に戻す
+            onChange={(v) => setReno({ status: reno.status === v ? null : v })}
+          />
+        </div>
+        {reno.status === 'yes' && (
+          <div className="renovation-detail">
+            <TextInput label="増改築の場所" value={reno.location} onChange={(v) => setReno({ location: v })} placeholder="例:3階 東側" />
+            <NumberInput
+              label="増築面積"
+              unit="㎡"
+              decimal
+              optional
+              value={reno.area}
+              error={errors.renovationArea}
+              onChange={(v) => setReno({ area: v })}
+            />
+            <TextInput label="増改築時期" value={reno.period} onChange={(v) => setReno({ period: v })} placeholder="例:令和5年3月" />
+          </div>
+        )}
+        <div className="field">
+          <span className="field-label">増改築の写真</span>
+          <PhotoStrip
+            title="増改築"
+            photoIds={reno.photoIds}
+            captions={reno.photoCaptions}
+            readOnly={false}
+            pending={renovationPhotos.pending}
+            onAdd={renovationPhotos.onAdd}
+            onRemove={renovationPhotos.onRemove}
+            onCaption={(id, caption) => {
+              const { [id]: _old, ...rest } = reno.photoCaptions;
+              void _old;
+              setReno({ photoCaptions: caption ? { ...rest, [id]: caption } : rest });
+            }}
+          />
+        </div>
       </Section>
 
       <Section title="規模">

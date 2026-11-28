@@ -5,9 +5,18 @@ import { Header, HeaderLink } from '../components/Header';
 import { InspectorsInput } from '../components/InspectorsInput';
 import { emptyBuildingForm, toBuildingForm, validateBuildingForm, type BuildingFormState } from '../logic/buildingForm';
 import { extractChecklistItems } from '../logic/extractChecklist';
-import { createCase, normalizeInspectors, parseInspectors, today, updateBuilding } from '../logic/inspectionCase';
+import {
+  createCase,
+  newId,
+  normalizeInspectors,
+  parseInspectors,
+  RENOVATION_PHOTO_KEY,
+  today,
+  updateBuilding,
+} from '../logic/inspectionCase';
+import { processImage } from '../photos/processImage';
 import { navigate, paths } from '../router';
-import { deleteCase, getCase, saveCase } from '../storage/caseStore';
+import { deleteCase, deletePhoto, deletePhotosByCase, getCase, saveCase, savePhoto } from '../storage/caseStore';
 import type { InspectionCase, Inspector } from '../types/inspection';
 
 interface MetaForm {
@@ -16,6 +25,8 @@ interface MetaForm {
 }
 
 interface Draft {
+  /** 案件ID。新規でも下書きの段階で決め、写真をこのIDで保存する */
+  caseId: string;
   form: BuildingFormState;
   meta: MetaForm;
 }
@@ -33,7 +44,7 @@ interface LegacyDraft {
 }
 
 function emptyDraft(): Draft {
-  return { form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }] } };
+  return { caseId: newId(), form: emptyBuildingForm(), meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }] } };
 }
 
 function loadDraft(): Draft {
@@ -42,7 +53,7 @@ function loadDraft(): Draft {
     if (raw) {
       const d = JSON.parse(raw) as Partial<Draft> & LegacyDraft;
       const e = emptyDraft();
-      const form = { ...e.form, ...d.form };
+      const form = { ...e.form, ...d.form, renovation: { ...e.form.renovation, ...d.form?.renovation } };
       // 旧形式の下書き(関係者・立会者が文字列)を移行
       if (d.form?.ownerName && !form.representative.name) form.representative = { title: '', name: d.form.ownerName };
       if (d.meta?.witness && !form.witness.name) form.witness = { title: '', name: d.meta.witness };
@@ -55,7 +66,11 @@ function loadDraft(): Draft {
           : Array.isArray(saved) && saved.length
             ? saved
             : e.meta.inspectors;
-      return { form, meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors } };
+      return {
+        caseId: d.caseId ?? e.caseId,
+        form,
+        meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors },
+      };
     }
   } catch {
     // 保存領域が使えない環境では空のフォームから開始
@@ -79,6 +94,9 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState(0);
+  /** 編集中に外した保存済みの写真(「保存」したときに削除する) */
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -86,6 +104,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
       if (!c) return setNotFound(true);
       setExisting(c);
       setDraft({
+        caseId: c.id,
         form: toBuildingForm(c.building),
         meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.length ? c.inspectors : [{ rank: '', name: '' }] },
       });
@@ -109,6 +128,44 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     );
   }
   if (!draft || !validation) return null;
+
+  const addRenovationPhotos = async (files: File[]) => {
+    const caseId = draft.caseId;
+    setPendingPhotos((n) => n + files.length);
+    // 端末のメモリを圧迫しないよう1枚ずつ処理する
+    for (const file of files) {
+      try {
+        const img = await processImage(file);
+        const id = newId();
+        await savePhoto({ id, caseId, itemId: RENOVATION_PHOTO_KEY, ...img, createdAt: new Date().toISOString() });
+        // 処理中に他の入力が変わっていても上書きしないよう、最新の状態に追加する
+        setDraft((d) =>
+          d && { ...d, form: { ...d.form, renovation: { ...d.form.renovation, photoIds: [...d.form.renovation.photoIds, id] } } },
+        );
+      } catch (e) {
+        alert(
+          e instanceof DOMException && e.name === 'QuotaExceededError'
+            ? '端末の空き容量が不足しているため写真を保存できませんでした。'
+            : `写真を追加できませんでした(${e instanceof Error ? e.message : String(e)})`,
+        );
+      } finally {
+        setPendingPhotos((n) => n - 1);
+      }
+    }
+  };
+
+  const removeRenovationPhoto = (id: string) => {
+    setDraft((d) => {
+      if (!d) return d;
+      const { [id]: _c, ...captions } = d.form.renovation.photoCaptions;
+      void _c;
+      const photoIds = d.form.renovation.photoIds.filter((x) => x !== id);
+      return { ...d, form: { ...d.form, renovation: { ...d.form.renovation, photoIds, photoCaptions: captions } } };
+    });
+    // 保存済みの案件に付いている写真は、編集を「保存」するまで消さない(戻るで取り消せるように)
+    if (existing?.building.renovation?.photoIds.includes(id)) setRemovedPhotos((r) => [...r, id]);
+    else void deletePhoto(id).catch(() => undefined);
+  };
 
   const dateError = showErrors && !draft.meta.inspectionDate ? '検査日を入力してください' : undefined;
   const setMeta = (patch: Partial<MetaForm>) => setDraft({ ...draft, meta: { ...draft.meta, ...patch } });
@@ -135,9 +192,10 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
           return;
         }
         await saveCase(next);
+        await Promise.all(removedPhotos.map((id) => deletePhoto(id).catch(() => undefined)));
         navigate(paths.check(existing.id), { replace: true });
       } else {
-        const c = createCase(building, meta);
+        const c = createCase(building, meta, new Date(), draft.caseId);
         await saveCase(c);
         storeDraft(null);
         navigate(paths.check(c.id), { replace: true });
@@ -151,6 +209,8 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
 
   const clear = () => {
     if (!confirm('入力内容をすべて消去しますか?')) return;
+    // 下書きで追加した写真も削除する
+    void deletePhotosByCase(draft.caseId).catch(() => undefined);
     setDraft(emptyDraft());
     setShowErrors(false);
   };
@@ -197,6 +257,11 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
           form={draft.form}
           errors={showErrors ? validation.errors : {}}
           onChange={(form) => setDraft({ ...draft, form })}
+          renovationPhotos={{
+            pending: pendingPhotos,
+            onAdd: (files) => void addRenovationPhotos(files),
+            onRemove: removeRenovationPhoto,
+          }}
         />
 
         {existing && (

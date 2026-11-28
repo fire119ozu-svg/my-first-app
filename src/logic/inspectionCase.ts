@@ -49,10 +49,13 @@ export function parseInspectors(raw: string): string[] {
     .filter(Boolean);
 }
 
-export function createCase(building: BuildingInfo, meta: CaseMeta, now = new Date()): InspectionCase {
+/**
+ * @param id 下書きの段階で写真を保存するため、事前に決めたIDを使う場合に指定
+ */
+export function createCase(building: BuildingInfo, meta: CaseMeta, now = new Date(), id = newId()): InspectionCase {
   const ts = now.toISOString();
   return {
-    id: newId(),
+    id,
     status: 'draft',
     inspectionDate: meta.inspectionDate,
     inspectors: meta.inspectors,
@@ -162,10 +165,13 @@ export function setPhotoCaption(
   return updateEntry(c, itemId, { photoCaptions: caption ? { ...rest, [photoId]: caption } : rest }, now);
 }
 
-/** 案件内の全写真ID(項目の並び順) */
+/** 案件内の全写真ID(増改築 → 項目の並び順) */
 export function allPhotoIds(c: InspectionCase): string[] {
-  return c.itemIds.flatMap((id) => c.entries[id]?.photoIds ?? []);
+  return [...(c.building.renovation?.photoIds ?? []), ...c.itemIds.flatMap((id) => c.entries[id]?.photoIds ?? [])];
 }
+
+/** 増改築の写真を保存するときの項目キー(PhotoRecord.itemId) */
+export const RENOVATION_PHOTO_KEY = '__renovation__';
 
 export function setStatus(c: InspectionCase, status: CaseStatus, now = new Date()): InspectionCase {
   return { ...c, status, updatedAt: now.toISOString() };

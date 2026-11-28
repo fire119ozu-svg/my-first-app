@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyBuildingForm, parseNumber, validateBuildingForm } from './buildingForm';
+import { emptyBuildingForm, emptyRenovation, parseNumber, toBuildingForm, validateBuildingForm } from './buildingForm';
 
 describe('parseNumber', () => {
   it('accepts full-width digits and commas', () => {
@@ -54,5 +54,45 @@ describe('validateBuildingForm', () => {
     expect(validateBuildingForm({ ...valid, usage: '16イ' }).errors.subUsages).toBeDefined();
     const { building } = validateBuildingForm({ ...valid, subUsages: ['3ロ'] });
     expect(building?.subUsages).toEqual([]);
+  });
+
+  describe('renovation', () => {
+    it('is undefined when nothing is entered', () => {
+      expect(validateBuildingForm(valid).building?.renovation).toBeUndefined();
+    });
+
+    it('keeps details when 有 and converts the area', () => {
+      const { building } = validateBuildingForm({
+        ...valid,
+        renovation: { ...emptyRenovation(), status: 'yes', location: ' 3階 東側 ', area: '１２０.５', period: '令和5年3月', photoIds: ['p1'], photoCaptions: { p1: '東側外観', gone: 'x' } },
+      });
+      expect(building?.renovation).toEqual({
+        status: 'yes', location: '3階 東側', area: 120.5, period: '令和5年3月', photoIds: ['p1'], photoCaptions: { p1: '東側外観' },
+      });
+    });
+
+    it('drops details when 無 but keeps photos', () => {
+      const { building } = validateBuildingForm({
+        ...valid,
+        renovation: { ...emptyRenovation(), status: 'no', location: '3階', area: '10', period: 'R5', photoIds: ['p1'] },
+      });
+      expect(building?.renovation).toEqual({ status: 'no', location: '', period: '', photoIds: ['p1'], photoCaptions: {} });
+    });
+
+    it('keeps photos even when 有無 is not selected', () => {
+      const { building } = validateBuildingForm({ ...valid, renovation: { ...emptyRenovation(), photoIds: ['p1'] } });
+      expect(building?.renovation?.status).toBeNull();
+      expect(building?.renovation?.photoIds).toEqual(['p1']);
+    });
+
+    it('rejects a non-numeric area and allows an empty one', () => {
+      expect(validateBuildingForm({ ...valid, renovation: { ...emptyRenovation(), status: 'yes', area: 'abc' } }).errors.renovationArea).toBeDefined();
+      expect(validateBuildingForm({ ...valid, renovation: { ...emptyRenovation(), status: 'yes', area: '' } }).building?.renovation).not.toHaveProperty('area');
+    });
+
+    it('round-trips through the edit form', () => {
+      const { building } = validateBuildingForm({ ...valid, renovation: { ...emptyRenovation(), status: 'yes', area: '120' } });
+      expect(toBuildingForm(building!).renovation.area).toBe('120');
+    });
   });
 });

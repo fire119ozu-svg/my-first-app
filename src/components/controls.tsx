@@ -64,9 +64,11 @@ export function NumberInput(props: {
   error?: string;
   decimal?: boolean;
   hint?: string;
+  /** 必須でない場合 true */
+  optional?: boolean;
 }) {
   return (
-    <Field label={props.label} error={props.error} required hint={props.hint}>
+    <Field label={props.label} error={props.error} required={!props.optional} hint={props.hint}>
       {(id) => (
         <div className="input-unit">
           <input

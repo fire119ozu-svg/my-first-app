@@ -87,6 +87,22 @@ export type FacilityType =
 // 対象物情報
 // ---------------------------------------------------------------------------
 
+/** 増改築の状況 */
+export interface RenovationInfo {
+  /** 有無(未選択は null) */
+  status: 'yes' | 'no' | null;
+  /** 場所(例:3階東側) */
+  location: string;
+  /** 増築面積(㎡) */
+  area?: number;
+  /** 増改築時期(例:令和5年3月) */
+  period: string;
+  /** 写真(有無に関わらず添付可)。画像本体は PhotoRecord */
+  photoIds: string[];
+  /** 写真ID → コメント */
+  photoCaptions: Record<string, string>;
+}
+
 /** 関係者の役職・氏名 */
 export interface PersonInfo {
   /** 役職(例:代表取締役、店長、防火管理者) */
@@ -107,6 +123,8 @@ export interface BuildingInfo {
   usage: UsageCategory;
   /** 複合用途(16項)の場合に含まれる用途 */
   subUsages: UsageCategory[];
+  /** 増改築の有無と内容(未入力は undefined) */
+  renovation?: RenovationInfo;
   /** 延べ面積(㎡) */
   totalFloorArea: number;
   /** 地上階数 */

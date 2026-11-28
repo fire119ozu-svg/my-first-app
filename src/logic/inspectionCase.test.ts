@@ -104,6 +104,18 @@ describe('inspectionCase', () => {
     expect(after.itemIds).toContain('FU-001');
   });
 
+  it('uses a given id and lists renovation photos first', () => {
+    let c = createCase(
+      { ...base, renovation: { status: 'yes', location: '', period: '', photoIds: ['r1'], photoCaptions: {} } },
+      meta,
+      new Date(),
+      'draft-id',
+    );
+    expect(c.id).toBe('draft-id');
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    expect(allPhotoIds(c)).toEqual(['r1', 'p1']);
+  });
+
   it('formats and normalizes inspectors', () => {
     expect(formatInspector({ rank: '消防司令補', name: '消防太郎' })).toBe('消防司令補 消防太郎');
     expect(formatInspector({ rank: '', name: '消防太郎' })).toBe('消防太郎');

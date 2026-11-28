@@ -172,6 +172,34 @@ describe('buildWorkbook with photos', () => {
     expect(texts(wb.getWorksheet('指摘事項')!)).toContain('写真 3枚(「写真」シート)');
   });
 
+  it('puts renovation info in the sheets and its photos first on the photo sheet', async () => {
+    let c = createCase(
+      {
+        ...building,
+        renovation: { status: 'yes', location: '3階 東側', area: 120, period: '令和5年3月', photoIds: ['r1'], photoCaptions: { r1: '増築部分 外観' } },
+      },
+      { inspectionDate: '2026-11-27', inspectors: [] },
+    );
+    c = addEntryPhoto(c, 'FU-001', 'p1');
+    const wb = await roundTrip(c, [photo('r1', '__renovation__'), photo('p1', 'FU-001')]);
+    const summary = '有(場所:3階 東側/増築面積:120㎡/時期:令和5年3月) 写真1枚(「写真」シート)';
+    expect(texts(wb.getWorksheet('チェックリスト')!)).toContain(summary);
+    const info = texts(wb.getWorksheet('対象物情報')!).join('|');
+    expect(info).toContain('増改築の有無|有');
+    expect(info).toContain('増築面積|120㎡');
+    const ws = wb.getWorksheet('写真')!;
+    const all = texts(ws).join('|');
+    expect(all.indexOf('増改築(対象物情報)')).toBeLessThan(all.indexOf('厨房設備(FU-001)'));
+    expect(all).toContain(summary);
+    expect(ws.getImages()).toHaveLength(2);
+  });
+
+  it('shows 無 / 未入力 when there is no renovation', async () => {
+    const none = createCase({ ...building, renovation: { status: 'no', location: '', period: '', photoIds: [], photoCaptions: {} } }, { inspectionDate: '2026-11-27', inspectors: [] });
+    expect(texts((await roundTrip(none)).getWorksheet('対象物情報')!).join('|')).toContain('増改築の有無|無');
+    expect(texts((await roundTrip(sampleCase())).getWorksheet('チェックリスト')!)).toContain('未入力');
+  });
+
   it('omits the photo sheet when no photos are attached', async () => {
     const wb = await roundTrip(sampleCase(), []);
     expect(wb.getWorksheet('写真')).toBeUndefined();

@@ -21,6 +21,8 @@ import {
   formatFloors,
   formatLegal,
   formatPerson,
+  formatRenovation,
+  formatRenovationStatus,
   formatResult,
   formatSpecified,
   formatStatus,
@@ -185,6 +187,16 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
     ws.getRow(r).height = Math.max(18, estimateLines(v1, 13 + 20) * LINE_HEIGHT + 4);
     r++;
   }
+
+  // 増改築
+  ws.mergeCells(r, 1, r, 2);
+  ws.mergeCells(r, 3, r, 8);
+  ws.getCell(r, 1).value = '増改築';
+  style(ws.getCell(r, 1), { bold: true, fill: COLOR.labelFill });
+  ws.getCell(r, 3).value = formatRenovation(b);
+  style(ws.getCell(r, 3));
+  ws.getRow(r).height = 20;
+  r++;
 
   // 判定集計
   const p = caseProgress(c, items.map((i) => i.id));
@@ -392,6 +404,10 @@ function addBuildingSheet(wb: Workbook, c: InspectionCase) {
     ['無窓階', yesNo(b.hasWindowlessFloor)],
     ['特定一階段等防火対象物', b.isSingleStaircase ? '該当' : '非該当'],
     ['管理権原が複数', yesNo(b.hasMultipleOwners)],
+    ['増改築の有無', formatRenovationStatus(b)],
+    ['増改築の場所', b.renovation?.location ?? ''],
+    ['増築面積', b.renovation?.area !== undefined ? `${b.renovation.area.toLocaleString('ja-JP')}㎡` : ''],
+    ['増改築時期', b.renovation?.period ?? ''],
     ['設置済みの消防用設備等', formatEquipment(b)],
     ['火気使用設備・危険物等', formatFacilities(b)],
   ];
@@ -429,9 +445,33 @@ const PHOTO_COL_WIDTH = 49; // ≒ 348px
 
 function addPhotoSheet(wb: Workbook, ctx: Ctx) {
   const { c, items } = ctx;
-  const groups = items
-    .map((item, idx) => ({ item, no: idx + 1, photos: itemPhotos(ctx, item.id) }))
-    .filter((g) => g.photos.length > 0);
+  interface Group {
+    heading: string;
+    headColor?: string;
+    memo: string;
+    photos: ExportPhoto[];
+    captions: Record<string, string>;
+  }
+  const reno = c.building.renovation;
+  const renoPhotos = (reno?.photoIds ?? []).map((id) => ctx.photos.get(id)).filter((p): p is ExportPhoto => !!p);
+  const groups: Group[] = [
+    // 増改築(対象物情報)の写真を最初に
+    ...(renoPhotos.length
+      ? [{ heading: '増改築(対象物情報)', memo: formatRenovation(c.building), photos: renoPhotos, captions: reno?.photoCaptions ?? {} }]
+      : []),
+    ...items
+      .map((item, idx) => {
+        const entry = c.entries[item.id];
+        return {
+          heading: `No.${idx + 1} ${item.title}(${item.id}) 判定:${formatResult(entry?.result)}`,
+          headColor: RESULT_STYLE[entry?.result ?? 'pending'].color,
+          memo: entry?.memo ?? '',
+          photos: itemPhotos(ctx, item.id),
+          captions: entry?.photoCaptions ?? {},
+        };
+      })
+      .filter((g) => g.photos.length > 0),
+  ];
   if (groups.length === 0) return;
 
   const ws = wb.addWorksheet('写真');
@@ -442,22 +482,20 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
   ws.getRow(1).height = 24;
 
   let r = 3;
-  for (const { item, no, photos } of groups) {
-    const entry = c.entries[item.id];
+  for (const { heading, headColor, memo, photos, captions } of groups) {
     ws.mergeCells(r, 1, r, 2);
     const head = ws.getCell(r, 1);
-    head.value = `No.${no} ${item.title}(${item.id}) 判定:${formatResult(entry?.result)}`;
-    const res = entry?.result ?? 'pending';
-    style(head, { bold: true, fill: COLOR.labelFill, color: RESULT_STYLE[res].color });
+    head.value = heading;
+    style(head, { bold: true, fill: COLOR.labelFill, color: headColor });
     ws.getRow(r).height = 20;
     r++;
 
-    if (entry?.memo.trim()) {
+    if (memo.trim()) {
       ws.mergeCells(r, 1, r, 2);
-      const memo = ws.getCell(r, 1);
-      memo.value = entry.memo;
-      style(memo);
-      ws.getRow(r).height = Math.max(18, estimateLines(entry.memo, PHOTO_COL_WIDTH * 2) * LINE_HEIGHT + 4);
+      const m = ws.getCell(r, 1);
+      m.value = memo;
+      style(m);
+      ws.getRow(r).height = Math.max(18, estimateLines(memo, PHOTO_COL_WIDTH * 2) * LINE_HEIGHT + 4);
       r++;
     }
 
@@ -481,7 +519,7 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
           editAs: 'oneCell',
         });
         const cap = ws.getCell(r + 1, j + 1);
-        const comment = entry?.photoCaptions?.[p.id]?.trim() ?? '';
+        const comment = captions[p.id]?.trim() ?? '';
         const date = new Date(p.createdAt).toLocaleString('ja-JP');
         // コメント(場所など)を主に、日時は補足として表示
         cap.value = comment
@@ -498,7 +536,7 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
       const captionLines = Math.max(
         1,
         ...pair.map((p, j) => {
-          const comment = entry?.photoCaptions?.[p.id]?.trim() ?? '';
+          const comment = captions[p.id]?.trim() ?? '';
           return comment ? estimateLines(`写真${i + j + 1} ${comment}`, PHOTO_COL_WIDTH) + 1 : 1;
         }),
       );

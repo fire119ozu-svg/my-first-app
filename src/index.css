@@ -921,3 +921,13 @@ fieldset.item-field > legend + * { clear: both; }
   color: var(--color-primary);
   font-weight: 600;
 }
+
+/* ---------- 増改築 ---------- */
+.renovation .segmented { grid-template-columns: repeat(2, 1fr); max-width: 220px; }
+.renovation-detail {
+  margin: -4px 0 14px;
+  padding: 12px 12px 2px;
+  border-left: 3px solid var(--color-primary-weak);
+  border-radius: 0 10px 10px 0;
+  background: var(--color-bg);
+}

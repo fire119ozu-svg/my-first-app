@@ -29,6 +29,27 @@ export function formatPerson(p: PersonInfo | undefined): string {
   return p ? [p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
 }
 
+export function formatRenovationStatus(b: BuildingInfo): string {
+  const st = b.renovation?.status;
+  return st === 'yes' ? '有' : st === 'no' ? '無' : '未入力';
+}
+
+/** 「有(場所:3階東側/増築面積:120㎡/時期:令和5年3月)写真2枚」 */
+export function formatRenovation(b: BuildingInfo): string {
+  const r = b.renovation;
+  let text = formatRenovationStatus(b);
+  if (r?.status === 'yes') {
+    const parts = [
+      r.location && `場所:${r.location}`,
+      r.area !== undefined && `増築面積:${r.area.toLocaleString('ja-JP')}㎡`,
+      r.period && `時期:${r.period}`,
+    ].filter(Boolean);
+    if (parts.length) text += `(${parts.join('/')})`;
+  }
+  if (r?.photoIds.length) text += ` 写真${r.photoIds.length}枚(「写真」シート)`;
+  return text;
+}
+
 export function formatSpecified(b: BuildingInfo): string {
   return isSpecifiedBuilding(b) ? '特定防火対象物' : '非特定防火対象物';
 }

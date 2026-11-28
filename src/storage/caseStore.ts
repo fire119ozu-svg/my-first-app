@@ -121,6 +121,20 @@ export function listPhotosByCase(caseId: string): Promise<PhotoRecord[]> {
   );
 }
 
+/** 指定した案件(下書きを含む)の写真をすべて削除する */
+export async function deletePhotosByCase(caseId: string): Promise<void> {
+  await tx(PHOTOS, 'readwrite', (t) => {
+    const photos = t.objectStore(PHOTOS);
+    const cursor = photos.index('caseId').openKeyCursor(IDBKeyRange.only(caseId));
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c) return;
+      photos.delete(c.primaryKey);
+      c.continue();
+    };
+  });
+}
+
 export async function deletePhoto(id: string): Promise<void> {
   await tx(PHOTOS, 'readwrite', (t) => t.objectStore(PHOTOS).delete(id));
 }

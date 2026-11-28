@@ -5,6 +5,7 @@ import type { BuildingInfo } from '../types/inspection';
 import {
   deleteCase,
   deletePhoto,
+  deletePhotosByCase,
   deleteReference,
   getCase,
   getPhoto,
@@ -83,5 +84,18 @@ describe('caseStore', () => {
     expect(await getReference('r1')).toBeDefined();
     await deleteReference('r1');
     expect(await listReferences()).toEqual([]);
+  });
+
+  it('deletes all photos of a draft case', async () => {
+    const photo = (id: string, caseId: string): PhotoRecord => ({
+      id, caseId, itemId: '__renovation__', blob: new Blob([new Uint8Array([1])]), thumb: new Blob([new Uint8Array([1])]),
+      width: 1, height: 1, createdAt: '',
+    });
+    await savePhoto(photo('d1', 'draft'));
+    await savePhoto(photo('d2', 'draft'));
+    await savePhoto(photo('k1', 'keep'));
+    await deletePhotosByCase('draft');
+    expect(await listPhotosByCase('draft')).toEqual([]);
+    expect(await getPhoto('k1')).toBeDefined();
   });
 });
