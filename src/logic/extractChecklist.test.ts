@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EQUIPMENT_OPTIONS } from '../data/labels';
 import { makeBuilding } from '../test/fixtures';
 import type { BuildingInfo } from '../types/inspection';
 import { evaluateCondition, extractChecklistItems, isSpecifiedBuilding } from './extractChecklist';
@@ -98,5 +99,23 @@ describe('extractChecklistItems', () => {
     const cats = items.map((i) => i.category);
     expect(cats.indexOf('fireManagement')).toBeLessThan(cats.indexOf('equipment'));
     expect(cats.lastIndexOf('fireManagement')).toBeLessThan(cats.indexOf('notification'));
+  });
+});
+
+describe('設置済みの消防用設備等', () => {
+  it('選択肢のどれを選んでも、その設備の維持管理の項目が抽出される', () => {
+    // 設置義務の無い小規模な建物(15項・100㎡・1階)で、設備を1つだけ選ぶ
+    const base = ids(building({ usage: '15', totalFloorArea: 100, floorsAbove: 1 }));
+    for (const { value, label } of EQUIPMENT_OPTIONS) {
+      const r = ids(building({ usage: '15', totalFloorArea: 100, floorsAbove: 1, installedEquipment: [value] }));
+      const added = r.filter((id) => !base.includes(id) && id.startsWith('EQ-'));
+      expect(added.length, label).toBeGreaterThan(0);
+    }
+  });
+
+  it('特殊消火設備・消防用水を選ぶと抽出される', () => {
+    expect(ids(building({ installedEquipment: ['specialExtinguishing'] }))).toContain('EQ-016');
+    expect(ids(building({ installedEquipment: ['fireWater'] }))).toContain('EQ-017');
+    expect(ids(building({ isHighRise: true, totalFloorArea: 25000, floorsAbove: 12 }))).toContain('EQ-017');
   });
 });

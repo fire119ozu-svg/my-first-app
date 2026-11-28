@@ -282,6 +282,20 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     note: '6項イ(1)(2)・6項ロは延焼抑制構造等による免除あり。11階以上の階は階ごとに判定。',
   },
   {
+    id: 'EQ-016',
+    category: 'equipment',
+    title: '特殊消火設備',
+    checkPoint:
+      '(水噴霧・泡・不活性ガス・ハロゲン化物・粉末)手動起動装置の表示・障害物、放出表示灯・音響警報装置の状態。貯蔵容器・選択弁・配管の損傷、容器の圧力・薬剤量。防護区画の開口部・換気装置の自動閉止。不活性ガス等は防護区画への出入口の注意表示。',
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第13条〜第18条'), law('消防法施行規則', '第16条〜第21条')],
+    condition: has('specialExtinguishing'),
+    severity: 'high',
+    note: '設置義務は駐車場・電気室・ボイラー室・通信機器室など部分の用途と床面積で判定(入力項目にないため、設置済みの場合に抽出する)。',
+    fields: [
+      { key: 'type', kind: 'text', label: '種類・防護区画', placeholder: '例:不活性ガス(二酸化炭素) 地下駐車場' },
+    ],
+  },
+  {
     id: 'EQ-004',
     category: 'equipment',
     title: '自動火災報知設備',
@@ -449,6 +463,16 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     condition: has('outdoorHydrant'),
     severity: 'medium',
     note: '設置義務は1階・2階の床面積合計(耐火9000㎡、準耐火6000㎡、その他3000㎡以上)で判定。',
+  },
+  {
+    id: 'EQ-017',
+    category: 'equipment',
+    title: '消防用水',
+    checkPoint: '標識の掲出、採水口・吸管投入孔の障害物、消防ポンプ自動車が接近できる経路の確保、必要な水量が保たれているか。',
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第27条')],
+    condition: requiredOrInstalled('fireWater', and(highRise, area(25000))),
+    severity: 'medium',
+    note: '高さ31m超で延べ面積(地階を除く)25000㎡以上のもののほか、敷地面積20000㎡以上で1階・2階の床面積合計(耐火15000㎡、準耐火10000㎡、その他5000㎡以上)のものも対象(敷地面積は入力項目にないため、設置済みの場合に抽出する)。',
   },
   {
     id: 'EQ-014',
