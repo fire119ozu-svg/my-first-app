@@ -190,7 +190,8 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
   height(ws, 18, Math.max(5, linesOf(body, 9.5) + 1));
 
   // 問い合わせ先・受領欄
-  put(ws, 19, 1, 21, 5, `(注)　お問い合わせ先\n　　　　${station}\n　　　　ＴＥＬ　${c.office?.phone ?? ''}`, { valign: 'top', border: true, indent: 1 });
+  // お問い合わせ先は枠の中央に配置する
+  put(ws, 19, 1, 21, 5, `(注)　お問い合わせ先\n${station}\nＴＥＬ　${c.office?.phone ?? ''}`, { align: 'center', valign: 'middle', border: true });
   put(ws, 19, 6, 19, 7, '受領年月日', { align: 'center', border: true });
   put(ws, 19, 8, 19, 10, '年　　月　　日', { align: 'right', border: true, indent: 1 });
   put(ws, 20, 6, 21, 7, '受領者氏名', { align: 'center', border: true });
