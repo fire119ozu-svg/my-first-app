@@ -198,7 +198,10 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
   put(ws, 19, 8, 19, 10, '年　　月　　日', { align: 'right', border: true, indent: 1 });
   put(ws, 20, 6, 21, 7, '受領者氏名', { align: 'center', border: true });
   put(ws, 20, 8, 21, 10, '', { border: true });
-  [19, 20, 21].forEach((r) => height(ws, r, 1.3));
+  // 受領欄・お問い合わせ先は記入に必要な高さに固定する(余白の配分対象にしない)
+  ws.getRow(19).height = 22; // 受領年月日
+  ws.getRow(20).height = 21; // 受領者氏名(2行分)
+  ws.getRow(21).height = 21;
 
   // 備考
   put(ws, 22, 1, 24, 1, '備\n考', { align: 'center', valign: 'middle', border: true });
@@ -216,9 +219,6 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
     [16, 0.5],
     // 17行目(立会者と本文枠の間)は1行ぶんのまま
     [18, 2], // 本文枠
-    [19, 0.5],
-    [20, 0.5],
-    [21, 0.5],
     [22, 1], // 備考欄
     [23, 1],
     [24, 1],
