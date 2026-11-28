@@ -486,8 +486,10 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '避難口の施錠管理',
     checkPoint: '営業中・在館中に避難口が施錠されていないか。屋内から鍵を用いずに解錠できるか(または非常時に自動解錠するか)。避難口の戸は外開きか。',
     legalBasis: [law('消防法', '第8条の2の4'), kochi('第40条第2号・第3号')],
-    condition: not(usage('18', '19', '20')),
+    // 誘導灯(避難口誘導灯等)が設置されている棟のみ確認する
+    condition: and(not(usage('18', '19', '20')), has('guideLight')),
     severity: 'high',
+    note: '対象物情報の「設置済みの消防用設備等」で誘導灯・誘導標識を選んだ棟のみ抽出する。',
   },
   {
     id: 'EV-004',
