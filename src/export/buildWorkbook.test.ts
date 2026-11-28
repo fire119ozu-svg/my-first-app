@@ -67,7 +67,7 @@ function findRow(ws: ExcelJS.Worksheet, pred: (v: unknown[]) => boolean): unknow
 describe('buildWorkbook', () => {
   it('creates the expected sheets', async () => {
     const wb = await roundTrip(sampleCase());
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['チェックリスト', '指摘事項', '階別記録', '対象物情報']);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['査察結果通知書', '指導事項', '改善計画・結果報告書', 'チェックリスト', '指摘事項', '階別記録', '対象物情報']);
   });
 
   it('writes case info, results, fields and memos to the checklist sheet', async () => {
@@ -158,7 +158,7 @@ describe('buildWorkbook with photos', () => {
     c = addEntryPhoto(c, K('EQ-001'), 'gone'); // 本体が無い写真は出力しない
     c = setPhotoCaption(c, K('FU-001'), 'p2', '1階 厨房 排気フード');
     const wb = await roundTrip(c, [photo('p1', 'FU-001'), photo('p2', 'FU-001', 1200, 1600), photo('p3', 'FU-001'), photo('p4', 'EQ-001')]);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['チェックリスト', '指摘事項', '階別記録', '写真', '対象物情報']);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['査察結果通知書', '指導事項', '改善計画・結果報告書', 'チェックリスト', '指摘事項', '階別記録', '写真', '対象物情報']);
 
     const ws = wb.getWorksheet('写真')!;
     expect(ws.getImages()).toHaveLength(4);

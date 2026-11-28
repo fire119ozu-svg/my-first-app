@@ -24,9 +24,9 @@ export function formatUsage(b: BuildingInfo): string {
   return `${u.code}項 ${u.label}${subs}`;
 }
 
-/** 「役職 氏名」(片方のみの場合はその値) */
+/** 「社名 役職 氏名」(入力のあるものだけ) */
 export function formatPerson(p: PersonInfo | undefined): string {
-  return p ? [p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
+  return p ? [p.org ?? '', p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
 }
 
 export function formatRenovationStatus(b: BuildingInfo): string {

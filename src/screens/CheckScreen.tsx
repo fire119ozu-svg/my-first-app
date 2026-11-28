@@ -459,7 +459,7 @@ const CheckItemCard = memo(function CheckItemCard({
         value={entry?.memo ?? ''}
         disabled={readOnly}
         ariaLabel={`${item.title}のメモ`}
-        placeholder={result === 'nonCompliant' ? '指摘内容・是正指導の内容' : 'メモ'}
+        placeholder={result === 'nonCompliant' ? '指摘箇所など(例:2階 厨房出入口)※指導事項に記載' : 'メモ'}
         onChange={(v) => onMemo(key, v)}
       />
     </article>

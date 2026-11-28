@@ -145,6 +145,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .field input[type='text'],
 .field input[type='date'],
+.field input[type='tel'],
 .field select {
   width: 100%;
   min-height: var(--tap-min);
@@ -1024,3 +1025,5 @@ fieldset.item-field > legend + * { clear: both; }
 .check-building-tabs .chip.done:not(.on) { border-color: var(--color-ok); color: var(--color-ok); }
 .building-summary { margin: 0 4px 12px; color: var(--color-muted); font-size: 0.8rem; }
 .building-summary strong { color: var(--color-text); }
+.person-org { margin-bottom: 6px; }
+.person-field .person-org input[type='text'] { width: 100%; }

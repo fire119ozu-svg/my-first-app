@@ -34,7 +34,7 @@ export interface SiteFormState {
   witness: PersonInfo;
 }
 
-const emptyPerson = (): PersonInfo => ({ title: '', name: '' });
+const emptyPerson = (): PersonInfo => ({ org: '', title: '', name: '' });
 
 export function emptySiteForm(): SiteFormState {
   return { name: '', address: '', representative: emptyPerson(), witness: emptyPerson() };
@@ -44,17 +44,19 @@ export function toSiteForm(s: SiteInfo): SiteFormState {
   return {
     name: s.name,
     address: s.address,
-    representative: s.representative ?? emptyPerson(),
-    witness: s.witness ?? emptyPerson(),
+    representative: { ...emptyPerson(), ...s.representative },
+    witness: { ...emptyPerson(), ...s.witness },
   };
 }
 
-/** 役職・氏名とも空なら未入力として扱う */
+/** 社名・役職・氏名がすべて空なら未入力として扱う */
 export function normalizePerson(p: PersonInfo | undefined): PersonInfo | undefined {
   if (!p) return undefined;
+  const org = (p.org ?? '').trim();
   const title = p.title.trim();
   const name = p.name.trim();
-  return title || name ? { title, name } : undefined;
+  if (!org && !title && !name) return undefined;
+  return org ? { org, title, name } : { title, name };
 }
 
 export function validateSiteForm(form: SiteFormState): { site: SiteInfo | null; errors: { name?: string } } {

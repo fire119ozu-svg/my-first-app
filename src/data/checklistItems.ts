@@ -223,7 +223,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '消火器',
     checkPoint:
       '適正な能力単位・歩行距離20m以内で設置されているか。標識、設置位置(床面から1.5m以下)、使用期限、本体の腐食・変形、安全栓の脱落がないか。',
-    legalBasis: [law('消防法施行令', '第10条'), law('消防法施行規則', '第6条〜第9条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第10条'), law('消防法施行規則', '第6条〜第9条')],
     condition: requiredOrInstalled(
       'extinguisher',
       or(
@@ -248,7 +248,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '屋内消火栓設備',
     checkPoint:
       '消火栓箱の前に障害物がないか。表示灯が点灯しているか。ホース・ノズルの損傷、ポンプの起動・非常電源の状態。',
-    legalBasis: [law('消防法施行令', '第11条'), law('消防法施行規則', '第12条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第11条'), law('消防法施行規則', '第12条')],
     condition: requiredOrInstalled(
       'indoorHydrant',
       or(
@@ -267,7 +267,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: 'スプリンクラー設備',
     checkPoint:
       'ヘッド周囲の散水障害(物品の積み上げ・間仕切り)がないか。制御弁の開閉状態、送水口の表示・障害物、ポンプ・非常電源の状態。',
-    legalBasis: [law('消防法施行令', '第12条'), law('消防法施行規則', '第13条〜第14条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第12条'), law('消防法施行規則', '第13条〜第14条')],
     condition: requiredOrInstalled(
       'sprinkler',
       or(
@@ -287,7 +287,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '自動火災報知設備',
     checkPoint:
       '受信機の電源・地区表示灯、ベル停止・音響停止スイッチが定位置か。感知器の未警戒区域(間仕切り変更・塗装)や障害がないか。発信機の前に障害物がないか。',
-    legalBasis: [law('消防法施行令', '第21条'), law('消防法施行規則', '第23条〜第24条の2')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第21条'), law('消防法施行規則', '第23条〜第24条の2')],
     condition: requiredOrInstalled(
       'autoFireAlarm',
       or(
@@ -312,7 +312,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '消防機関へ通報する火災報知設備',
     checkPoint:
       '火災通報装置の電源、通報先・通報内容の設定が適正か。6項イ(1)(2)・6項ロ等は自動火災報知設備と連動しているか。',
-    legalBasis: [law('消防法施行令', '第23条'), law('消防法施行規則', '第25条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第23条'), law('消防法施行規則', '第25条')],
     condition: requiredOrInstalled(
       'fireDeptNotification',
       or(
@@ -329,7 +329,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '非常警報設備(非常ベル・放送設備等)',
     checkPoint: '起動装置・表示灯の状態、音響装置の鳴動、非常電源。放送設備は操作部の位置・スピーカーの障害。',
-    legalBasis: [law('消防法施行令', '第24条'), law('消防法施行規則', '第25条の2')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第24条'), law('消防法施行規則', '第25条の2')],
     condition: requiredOrInstalled(
       'emergencyAlarm',
       or(capacity(50), and(windowless, capacity(20)), floorsAbove(11), floorsBelow(3)),
@@ -342,7 +342,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '避難器具',
     checkPoint: '設置場所に障害物がないか。降下空間・降着面が確保されているか。標識・操作方法の表示、器具の損傷。',
-    legalBasis: [law('消防法施行令', '第25条'), law('消防法施行規則', '第26条〜第27条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第25条'), law('消防法施行規則', '第26条〜第27条')],
     condition: requiredOrInstalled(
       'evacuationDevice',
       and(
@@ -364,7 +364,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '誘導灯・誘導標識',
     checkPoint: '誘導灯が常時点灯しているか。視認障害(物品・看板)がないか。非常電源(バッテリー)の点検。',
-    legalBasis: [law('消防法施行令', '第26条'), law('消防法施行規則', '第28条の2〜第28条の3')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第26条'), law('消防法施行規則', '第28条の2〜第28条の3')],
     condition: requiredOrInstalled(
       'guideLight',
       or(
@@ -381,7 +381,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '漏電火災警報器',
     checkPoint: '受信機の電源表示、作動試験の状態、変流器の設置状況。',
-    legalBasis: [law('消防法施行令', '第22条'), law('消防法施行規則', '第24条の3')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第22条'), law('消防法施行規則', '第24条の3')],
     condition: has('leakageAlarm'),
     severity: 'low',
     note: '設置義務は壁・床・天井が鉄網入り(ラスモルタル造等)の建築物で用途・面積・契約電流による。',
@@ -391,7 +391,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '連結送水管',
     checkPoint: '送水口の表示・障害物・キャップの有無。放水口格納箱の表示と内部の状態。',
-    legalBasis: [law('消防法施行令', '第29条'), law('消防法施行規則', '第30条の4')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第29条'), law('消防法施行規則', '第30条の4')],
     condition: requiredOrInstalled(
       'standpipe',
       or(floorsAbove(7), and(floorsAbove(5), area(6000)), and(usage('16の2'), area(1000))),
@@ -407,7 +407,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '連結散水設備',
     checkPoint:
       '送水口の表示・障害物・キャップの有無。送水区域・選択弁の系統図が掲示されているか。散水ヘッド周囲の散水障害がないか。',
-    legalBasis: [law('消防法施行令', '第28条の2'), law('消防法施行規則', '第30条の2〜第30条の3')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第28条の2'), law('消防法施行規則', '第30条の2〜第30条の3')],
     condition: requiredOrInstalled('connectedSprinkler', and(usage('16の2'), area(700))),
     severity: 'medium',
     note: '設置義務は地階の床面積の合計700㎡以上で判定(地下街は延べ700㎡以上)。地階の床面積は入力項目にないため、設置済みの場合に抽出する。',
@@ -420,7 +420,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '非常コンセント設備',
     checkPoint: '表示灯の点灯、保護箱の表示・障害物、非常電源。',
-    legalBasis: [law('消防法施行令', '第29条の2'), law('消防法施行規則', '第31条の2')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第29条の2'), law('消防法施行規則', '第31条の2')],
     condition: requiredOrInstalled('emergencyOutlet', or(floorsAbove(11), and(usage('16の2'), area(1000)))),
     severity: 'medium',
   },
@@ -429,7 +429,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '排煙設備',
     checkPoint: '手動起動装置の表示・障害物、排煙口の開放障害、排煙機・非常電源の状態。',
-    legalBasis: [law('消防法施行令', '第28条'), law('消防法施行規則', '第30条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第28条'), law('消防法施行規則', '第30条')],
     condition: requiredOrInstalled(
       'smokeExhaust',
       or(
@@ -445,7 +445,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: '屋外消火栓設備',
     checkPoint: '消火栓・ホース格納箱の表示・障害物、ホースの損傷、ポンプの状態。',
-    legalBasis: [law('消防法施行令', '第19条'), law('消防法施行規則', '第22条')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第19条'), law('消防法施行規則', '第22条')],
     condition: has('outdoorHydrant'),
     severity: 'medium',
     note: '設置義務は1階・2階の床面積合計(耐火9000㎡、準耐火6000㎡、その他3000㎡以上)で判定。',
@@ -455,7 +455,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'equipment',
     title: 'ガス漏れ火災警報設備',
     checkPoint: '受信機の電源・表示、検知器の設置位置・有効期限。',
-    legalBasis: [law('消防法施行令', '第21条の2'), law('消防法施行規則', '第24条の2の2〜第24条の2の4')],
+    legalBasis: [law('消防法', '第17条'), law('消防法施行令', '第21条の2'), law('消防法施行規則', '第24条の2の2〜第24条の2の4')],
     condition: requiredOrInstalled('gasLeakAlarm', and(usage('16の2', '16の3'), area(1000))),
     severity: 'medium',
     note: '特定用途の地階で床面積1000㎡以上のもの等にも設置義務あり。',

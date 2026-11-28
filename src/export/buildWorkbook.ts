@@ -4,6 +4,8 @@
  * 棟が複数ある場合は、棟ごとに見出しを付けて続けて出力する(番号は通し番号)。
  *
  * シート構成:
+ *   0. 査察結果通知書(様式第4号)・指導事項(様式第5号)・改善計画・結果報告書(様式第7号)
+ *      … 指導事項(判定「否」)が無い場合は通知書のみ
  *   1. チェックリスト … 案件情報・判定集計・全項目の判定/記録/メモ・備考
  *   2. 指摘事項       … 判定「否」の項目のみ(指導・通知書作成用)
  *   3. 階別記録       … 階ごとの収容人員・階ごとの入力欄(消火器の能力単位など)
@@ -11,6 +13,7 @@
  *   5. 対象物情報     … 入力した対象物情報と届出状況
  */
 import type ExcelJS from 'exceljs';
+import { addGuidanceSheet, addImprovementSheet, addNoticeSheet, collectFindings } from './officialForms';
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
 import { buildingName, caseProgress, checklistOf, entryKey, formatInspector } from '../logic/inspectionCase';
@@ -545,8 +548,10 @@ function addBuildingSheet(wb: Workbook, ctx: Ctx) {
     [
       ['名称', site.name],
       ['所在地', site.address],
+      ['代表者 社名・所属', site.representative?.org ?? ''],
       ['代表者 役職', site.representative?.title ?? ''],
       ['代表者 氏名', site.representative?.name ?? ''],
+      ['立会者 社名・所属', site.witness?.org ?? ''],
       ['立会者 役職', site.witness?.title ?? ''],
       ['立会者 氏名', site.witness?.name ?? ''],
       ...(multi ? ([['棟数', `${c.buildings.length}棟`]] as [string, string][]) : []),
@@ -701,6 +706,13 @@ export function buildWorkbook(ExcelJSLib: typeof ExcelJS, c: InspectionCase, opt
     multi: c.buildings.length > 1,
     photos: new Map((opts.photos ?? []).map((p) => [p.id, p])),
   };
+  // 査察結果通知書(様式第4号)を先頭に。指導事項がある場合は指導事項(様式第5号)・改善計画(様式第7号)も
+  const findings = collectFindings(c);
+  addNoticeSheet(wb, c, findings.length > 0);
+  if (findings.length > 0) {
+    addGuidanceSheet(wb, c, findings);
+    addImprovementSheet(wb, c, findings);
+  }
   addChecklistSheet(wb, ctx, exportedAt);
   addFindingsSheet(wb, ctx);
   addPerFloorSheet(wb, ctx);

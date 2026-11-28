@@ -105,9 +105,19 @@ export interface RenovationInfo {
 
 /** 関係者の役職・氏名 */
 export interface PersonInfo {
+  /** 社名・所属(例:○○株式会社、○○株式会社 総務部) */
+  org?: string;
   /** 役職(例:代表取締役、店長、防火管理者) */
   title: string;
   name: string;
+}
+
+/** 査察員の所属と問い合わせ先(査察結果通知書・改善計画書に記載) */
+export interface OfficeInfo {
+  /** 所属(例:高知市中央消防署庶務予防係) */
+  department: string;
+  /** 問い合わせ先の電話番号 */
+  phone: string;
 }
 
 /** 対象物(敷地)全体の情報。棟が複数あっても1つ */
@@ -337,6 +347,8 @@ export interface InspectionCase {
   inspectionDate: string;
   /** 検査員 */
   inspectors: Inspector[];
+  /** 査察員の所属・問い合わせ先 */
+  office?: OfficeInfo;
   /** 対象物(敷地)全体の情報 */
   site: SiteInfo;
   /** 棟(1つ以上) */

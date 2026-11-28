@@ -28,11 +28,34 @@ import { processImage } from '../photos/processImage';
 import { navigate, paths } from '../router';
 import { deleteCase, deletePhoto, deletePhotosByCase, getCase, saveCase, savePhoto } from '../storage/caseStore';
 import { splitLegacyBuilding, type LegacyBuilding } from '../storage/migrate';
-import type { InspectionCase, Inspector } from '../types/inspection';
+import type { InspectionCase, Inspector, OfficeInfo } from '../types/inspection';
 
 interface MetaForm {
   inspectionDate: string;
   inspectors: Inspector[];
+  office: OfficeInfo;
+}
+
+/**
+ * 査察員の所属・問い合わせ先は毎回同じことが多いため、前回の値を端末に覚えておき新規案件に入れる。
+ * (利便性のためだけの保存。消えても入力し直せばよい)
+ */
+const OFFICE_KEY = 'officeDefaults:v1';
+function loadOffice(): OfficeInfo {
+  try {
+    const raw = localStorage.getItem(OFFICE_KEY);
+    if (raw) return { department: '', phone: '', ...(JSON.parse(raw) as Partial<OfficeInfo>) };
+  } catch {
+    // 保存領域が使えない環境では空欄
+  }
+  return { department: '', phone: '' };
+}
+function storeOffice(o: OfficeInfo) {
+  try {
+    localStorage.setItem(OFFICE_KEY, JSON.stringify(o));
+  } catch {
+    // 保存できなくても入力は継続できる
+  }
 }
 
 interface Draft {
@@ -56,7 +79,7 @@ function emptyDraft(): Draft {
     caseId: newId(),
     site: emptySiteForm(),
     buildings: [emptyBuildingForm()],
-    meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }] },
+    meta: { inspectionDate: today(), inspectors: [{ rank: '', name: '' }], office: loadOffice() },
   };
 }
 
@@ -113,7 +136,7 @@ function fromLegacyDraft(raw: string): Draft {
     caseId: d.caseId ?? e.caseId,
     site,
     buildings: [building],
-    meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors },
+    meta: { inspectionDate: d.meta?.inspectionDate ?? e.meta.inspectionDate, inspectors, office: e.meta.office },
   };
 }
 
@@ -172,7 +195,11 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
         caseId: c.id,
         site: toSiteForm(c.site),
         buildings: c.buildings.map(toBuildingForm),
-        meta: { inspectionDate: c.inspectionDate, inspectors: c.inspectors.length ? c.inspectors : [{ rank: '', name: '' }] },
+        meta: {
+          inspectionDate: c.inspectionDate,
+          inspectors: c.inspectors.length ? c.inspectors : [{ rank: '', name: '' }],
+          office: c.office ?? loadOffice(),
+        },
       });
     });
   }, [caseId, isEdit]);
@@ -279,7 +306,9 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     }
     const site = validation.site.site!;
     const buildings = validation.buildings.map((v) => v.building!);
-    const meta = { inspectionDate: draft.meta.inspectionDate, inspectors: normalizeInspectors(draft.meta.inspectors) };
+    const office = { department: draft.meta.office.department.trim(), phone: draft.meta.office.phone.trim() };
+    const meta = { inspectionDate: draft.meta.inspectionDate, inspectors: normalizeInspectors(draft.meta.inspectors), office };
+    if (office.department || office.phone) storeOffice(office);
     setSaving(true);
     try {
       if (existing) {
@@ -346,6 +375,20 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
             )}
           </Field>
           <InspectorsInput value={draft.meta.inspectors} onChange={(inspectors) => setMeta({ inspectors })} />
+          <TextInput
+            label="所属"
+            value={draft.meta.office.department}
+            onChange={(department) => setMeta({ office: { ...draft.meta.office, department } })}
+            placeholder="例:高知市中央消防署庶務予防係"
+            hint="査察結果通知書に記載します。次の案件にも自動で入ります"
+          />
+          <TextInput
+            label="問い合わせ先TEL"
+            inputMode="tel"
+            value={draft.meta.office.phone}
+            onChange={(phone) => setMeta({ office: { ...draft.meta.office, phone } })}
+            placeholder="例:088-000-0000"
+          />
           {/* 対象物情報の立会者と同じ値を編集する(どちらで入力しても両方に反映) */}
           <PersonInput
             label="立会者"
@@ -359,7 +402,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
         <Section title="基本情報">
           <TextInput label="名称" required value={draft.site.name} error={siteErrors.name} onChange={(v) => setSite({ name: v })} placeholder="例:○○ビル" />
           <TextInput label="所在地" value={draft.site.address} onChange={(v) => setSite({ address: v })} placeholder="例:高知市本町○丁目" />
-          <PersonInput label="代表者" titlePlaceholder="例:代表取締役" value={draft.site.representative} onChange={(representative) => setSite({ representative })} />
+          <PersonInput label="代表者(通知書の名宛人)" titlePlaceholder="例:代表取締役" value={draft.site.representative} onChange={(representative) => setSite({ representative })} />
           <PersonInput label="立会者" titlePlaceholder="例:防火管理者" hint="検査情報の立会者と連動" value={draft.site.witness} onChange={(witness) => setSite({ witness })} />
         </Section>
 

@@ -13,6 +13,7 @@ import type {
   InspectionCase,
   Inspector,
   ItemFieldValue,
+  OfficeInfo,
   SiteInfo,
 } from '../types/inspection';
 import { extractChecklistItems, sortChecklistItems } from './extractChecklist';
@@ -20,6 +21,7 @@ import { extractChecklistItems, sortChecklistItems } from './extractChecklist';
 export interface CaseMeta {
   inspectionDate: string;
   inspectors: Inspector[];
+  office?: OfficeInfo;
 }
 
 export function newId(): string {
@@ -100,6 +102,7 @@ export function createCase(
     status: 'draft',
     inspectionDate: meta.inspectionDate,
     inspectors: meta.inspectors,
+    ...(meta.office ? { office: meta.office } : {}),
     site,
     buildings,
     checklists: buildings.map((b) => ({ buildingId: b.id, itemIds: extractChecklistItems(b).map((i) => i.id) })),
@@ -173,6 +176,7 @@ export function updateCaseInfo(
       entries,
       inspectionDate: meta.inspectionDate,
       inspectors: meta.inspectors,
+      office: meta.office,
       updatedAt: now.toISOString(),
     },
     removedPhotoIds,
