@@ -40,13 +40,16 @@ export function TextInput(props: {
   error?: string;
   required?: boolean;
   placeholder?: string;
+  inputMode?: 'text' | 'tel';
+  hint?: string;
 }) {
   return (
-    <Field label={props.label} error={props.error} required={props.required}>
+    <Field label={props.label} error={props.error} required={props.required} hint={props.hint}>
       {(id) => (
         <input
           id={id}
-          type="text"
+          type={props.inputMode === 'tel' ? 'tel' : 'text'}
+          inputMode={props.inputMode}
           value={props.value}
           placeholder={props.placeholder}
           onChange={(e) => props.onChange(e.target.value)}
@@ -64,9 +67,11 @@ export function NumberInput(props: {
   error?: string;
   decimal?: boolean;
   hint?: string;
+  /** 必須でない場合 true */
+  optional?: boolean;
 }) {
   return (
-    <Field label={props.label} error={props.error} required hint={props.hint}>
+    <Field label={props.label} error={props.error} required={!props.optional} hint={props.hint}>
       {(id) => (
         <div className="input-unit">
           <input
@@ -163,9 +168,10 @@ export function Segmented<T extends string>(props: {
 /** 役職・氏名の入力(横並び。iPhoneの幅でも2列で収まる) */
 export function PersonInput(props: {
   label: string;
-  value: { title: string; name: string };
-  onChange: (v: { title: string; name: string }) => void;
+  value: { org?: string; title: string; name: string };
+  onChange: (v: { org?: string; title: string; name: string }) => void;
   titlePlaceholder?: string;
+  orgPlaceholder?: string;
   hint?: string;
 }) {
   const id = useId();
@@ -173,6 +179,17 @@ export function PersonInput(props: {
     <fieldset className="field person-field">
       <legend className="field-label">{props.label}</legend>
       {props.hint && <p className="field-hint person-hint">{props.hint}</p>}
+      <div className="person-org">
+        <label htmlFor={`${id}-org`} className="sub-label">社名・所属</label>
+        <input
+          id={`${id}-org`}
+          type="text"
+          value={props.value.org ?? ''}
+          placeholder={props.orgPlaceholder ?? '例:○○株式会社'}
+          aria-label={`${props.label}の社名・所属`}
+          onChange={(e) => props.onChange({ ...props.value, org: e.target.value })}
+        />
+      </div>
       <div className="person-row">
         <div>
           <label htmlFor={`${id}-title`} className="sub-label">役職</label>

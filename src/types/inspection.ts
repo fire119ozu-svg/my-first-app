@@ -87,14 +87,41 @@ export type FacilityType =
 // 対象物情報
 // ---------------------------------------------------------------------------
 
+/** 増改築の状況 */
+export interface RenovationInfo {
+  /** 有無(未選択は null) */
+  status: 'yes' | 'no' | null;
+  /** 場所(例:3階東側) */
+  location: string;
+  /** 増築面積(㎡) */
+  area?: number;
+  /** 増改築時期(例:令和5年3月) */
+  period: string;
+  /** 写真(有無に関わらず添付可)。画像本体は PhotoRecord */
+  photoIds: string[];
+  /** 写真ID → コメント */
+  photoCaptions: Record<string, string>;
+}
+
 /** 関係者の役職・氏名 */
 export interface PersonInfo {
+  /** 社名・所属(例:○○株式会社、○○株式会社 総務部) */
+  org?: string;
   /** 役職(例:代表取締役、店長、防火管理者) */
   title: string;
   name: string;
 }
 
-export interface BuildingInfo {
+/** 査察員の所属と問い合わせ先(査察結果通知書・改善計画書に記載) */
+export interface OfficeInfo {
+  /** 所属(例:高知市中央消防署庶務予防係) */
+  department: string;
+  /** 問い合わせ先の電話番号 */
+  phone: string;
+}
+
+/** 対象物(敷地)全体の情報。棟が複数あっても1つ */
+export interface SiteInfo {
   /** 対象物名称 */
   name: string;
   /** 所在地 */
@@ -103,18 +130,49 @@ export interface BuildingInfo {
   representative?: PersonInfo;
   /** 立会者 */
   witness?: PersonInfo;
+}
+
+/** 複合用途(16項)のテナント */
+export interface Tenant {
+  id: string;
+  name: string;
+  /** 用途の項(未選択は空文字) */
+  usage: UsageCategory | '';
+  /** 入居階(未選択は空文字)。複数階に入るテナントは階ごとに1行 */
+  floor: FloorKey | '';
+  /** 床面積(㎡) */
+  area?: number;
+  /** 収容人員 */
+  capacity?: number;
+}
+
+/**
+ * 棟ごとの情報。消防法令上は原則として棟ごとに防火対象物となるため、
+ * 用途・規模・設備等とチェック項目の抽出は棟単位で行う。
+ */
+export interface BuildingInfo {
+  /** 棟の識別子(案件内で一意) */
+  id: string;
+  /** 棟名(例:A棟、本館)。1棟のみなら空でもよい */
+  label: string;
   /** 主たる用途の項 */
   usage: UsageCategory;
-  /** 複合用途(16項)の場合に含まれる用途 */
+  /** 複合用途(16項)の場合に含まれる用途(16項ではテナントの用途から自動設定) */
   subUsages: UsageCategory[];
+  /** 16項のテナント */
+  tenants: Tenant[];
+  /** 増改築の有無と内容(未入力は undefined) */
+  renovation?: RenovationInfo;
   /** 延べ面積(㎡) */
   totalFloorArea: number;
   /** 地上階数 */
   floorsAbove: number;
   /** 地下階数 */
   floorsBelow: number;
-  /** 収容人員(令第1条の3) */
+  /** 収容人員(令第1条の3)の合計。階ごと(16項はテナントごと)の入力から算出 */
   capacity: number;
+  /** 階ごとの収容人員(16項ではテナントの収容人員を階ごとに合計したもの) */
+  floorCapacities: Record<FloorKey, number>;
   /** 高さ31mを超えるか(高層建築物:法第8条の2、第8条の3) */
   isHighRise: boolean;
   /** 無窓階の有無(令第10条第1項第1号) */
@@ -158,8 +216,7 @@ export interface LegalBasis {
   article: string;
   /**
    * 条番号を原典で確認済みか。
-   * 条例の条番号は火災予防条例(例)に準拠して記載しており、
-   * 高知市例規集との照合が済むまで false とする。
+   * 条例本文との照合が済んでいないものは false とし、画面・Excelに「条番号要確認」と表示する。
    */
   verified: boolean;
 }
@@ -240,6 +297,13 @@ export type ItemFieldValue = string | Record<FloorKey, string>;
 // 検査案件・チェック結果
 // ---------------------------------------------------------------------------
 
+/** 検査員(階級・氏名) */
+export interface Inspector {
+  /** 消防吏員の階級(例:消防司令補)。未選択は空文字 */
+  rank: string;
+  name: string;
+}
+
 /** 判定:適 / 否 / 該当なし */
 export type CheckResult = 'compliant' | 'nonCompliant' | 'notApplicable';
 
@@ -250,6 +314,9 @@ export const CHECK_RESULT_LABELS: Record<CheckResult, string> = {
 };
 
 export interface CheckEntry {
+  /** 棟ID */
+  buildingId: string;
+  /** チェック項目マスタのID */
   itemId: string;
   /** 未判定は null */
   result: CheckResult | null;
@@ -266,6 +333,11 @@ export interface CheckEntry {
 
 export type CaseStatus = 'draft' | 'inspecting' | 'completed';
 
+export interface BuildingChecklist {
+  buildingId: string;
+  itemIds: string[];
+}
+
 /** 検査案件(端末内に保存する単位) */
 export interface InspectionCase {
   /** crypto.randomUUID() */
@@ -274,11 +346,16 @@ export interface InspectionCase {
   /** 検査日(YYYY-MM-DD) */
   inspectionDate: string;
   /** 検査員 */
-  inspectors: string[];
-  building: BuildingInfo;
-  /** 抽出された項目IDの並び(抽出時点のスナップショット) */
-  itemIds: string[];
-  /** 項目IDごとの結果 */
+  inspectors: Inspector[];
+  /** 査察員の所属・問い合わせ先 */
+  office?: OfficeInfo;
+  /** 対象物(敷地)全体の情報 */
+  site: SiteInfo;
+  /** 棟(1つ以上) */
+  buildings: BuildingInfo[];
+  /** 棟ごとに抽出された項目IDの並び(抽出時点のスナップショット) */
+  checklists: BuildingChecklist[];
+  /** 結果。キーは entryKey(棟ID, 項目ID) */
   entries: Record<string, CheckEntry>;
   /** 案件全体の備考 */
   remarks: string;
@@ -302,4 +379,23 @@ export interface PhotoRecord {
   height: number;
   /** 追加日時(ISO 8601) */
   createdAt: string;
+}
+
+/**
+ * 参考資料(利用者が端末に取り込んだPDF・画像)。
+ * 端末内のIndexedDBにのみ保存し、外部へは送信しない。案件とは独立。
+ */
+export interface ReferenceRecord {
+  id: string;
+  title: string;
+  /** 分類(例:設置基準、点検要領)。未指定は空文字 */
+  category: string;
+  kind: 'pdf' | 'image';
+  blob: Blob;
+  /** PDFのページ数(画像は1) */
+  pageCount: number;
+  /** 取り込み元のファイル名 */
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
 }

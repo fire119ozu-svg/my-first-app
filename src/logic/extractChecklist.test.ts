@@ -1,27 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { makeBuilding } from '../test/fixtures';
 import type { BuildingInfo } from '../types/inspection';
 import { evaluateCondition, extractChecklistItems, isSpecifiedBuilding } from './extractChecklist';
 
-function building(overrides: Partial<BuildingInfo>): BuildingInfo {
-  return {
-    name: 'テスト',
-    address: '高知市',
-    usage: '15',
-    subUsages: [],
-    totalFloorArea: 0,
-    floorsAbove: 1,
-    floorsBelow: 0,
-    capacity: 0,
-    isHighRise: false,
-    hasWindowlessFloor: false,
-    isSingleStaircase: false,
-    hasMultipleOwners: false,
-    installedEquipment: [],
-    facilities: [],
-    notifications: {},
-    ...overrides,
-  };
-}
+const building = makeBuilding;
 
 const ids = (b: BuildingInfo) => extractChecklistItems(b).map((i) => i.id);
 

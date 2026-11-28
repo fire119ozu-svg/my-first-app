@@ -24,9 +24,30 @@ export function formatUsage(b: BuildingInfo): string {
   return `${u.code}項 ${u.label}${subs}`;
 }
 
-/** 「役職 氏名」(片方のみの場合はその値) */
+/** 「社名 役職 氏名」(入力のあるものだけ) */
 export function formatPerson(p: PersonInfo | undefined): string {
-  return p ? [p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
+  return p ? [p.org ?? '', p.title, p.name].map((x) => x.trim()).filter(Boolean).join(' ') : '';
+}
+
+export function formatRenovationStatus(b: BuildingInfo): string {
+  const st = b.renovation?.status;
+  return st === 'yes' ? '有' : st === 'no' ? '無' : '未入力';
+}
+
+/** 「有(場所:3階東側/増築面積:120㎡/時期:令和5年3月)写真2枚」 */
+export function formatRenovation(b: BuildingInfo): string {
+  const r = b.renovation;
+  let text = formatRenovationStatus(b);
+  if (r?.status === 'yes') {
+    const parts = [
+      r.location && `場所:${r.location}`,
+      r.area !== undefined && `増築面積:${r.area.toLocaleString('ja-JP')}㎡`,
+      r.period && `時期:${r.period}`,
+    ].filter(Boolean);
+    if (parts.length) text += `(${parts.join('/')})`;
+  }
+  if (r?.photoIds.length) text += ` 写真${r.photoIds.length}枚(「写真」シート)`;
+  return text;
 }
 
 export function formatSpecified(b: BuildingInfo): string {
@@ -84,7 +105,7 @@ export function notificationRows(b: BuildingInfo): [string, string][] {
 
 /** ファイル名に使えない文字を除去 */
 export function exportFileName(c: InspectionCase): string {
-  const name = c.building.name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) || '案件';
+  const name = c.site.name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) || '案件';
   return `立入検査_${name}_${c.inspectionDate.replace(/-/g, '')}.xlsx`;
 }
 
