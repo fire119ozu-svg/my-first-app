@@ -2,20 +2,15 @@ import { EQUIPMENT_OPTIONS, FACILITY_OPTIONS, NOTIFICATION_OPTIONS, NOTIFICATION
 import { USAGE_CATEGORIES } from '../data/usageCategories';
 import { emptyTenant, formFloorKeys, summarizeCapacity, type BuildingFormState, type FormErrors, type RenovationForm } from '../logic/buildingForm';
 import { isCompositeUsage } from '../logic/extractChecklist';
+import { renovationPhotoKey } from '../logic/inspectionCase';
 import { floorLabel } from '../logic/floors';
 import { windowlessFloors, type OpeningRecordForm } from '../logic/openings';
 import type { UsageCategory } from '../types/inspection';
 import { FloorCapacityInput, TenantsInput } from './CapacityInputs';
 import { ChipGroup, Field, NumberInput, Section, Segmented, TextInput, Toggle } from './controls';
 import { OpeningRecordsInput } from './OpeningRecordsInput';
+import { withCaption, withoutPhoto, type FormPhotoHandlers } from './formPhotos';
 import { PhotoStrip } from './PhotoStrip';
-
-/** 増改築の写真操作(保存処理は画面側で行う) */
-export interface RenovationPhotoHandlers {
-  pending: number;
-  onAdd: (files: File[]) => void;
-  onRemove: (photoId: string) => void;
-}
 
 const RENOVATION_OPTIONS: { value: 'yes' | 'no'; label: string }[] = [
   { value: 'yes', label: '有' },
@@ -26,13 +21,13 @@ interface Props {
   form: BuildingFormState;
   errors: FormErrors;
   onChange: (next: BuildingFormState) => void;
-  renovationPhotos: RenovationPhotoHandlers;
+  photos: FormPhotoHandlers;
   /** 棟の見出し(例:A棟) */
   title: string;
 }
 
 /** 1棟ぶんの入力(用途・増改築・規模・構造・設備・届出) */
-export function BuildingForm({ form, errors, onChange, renovationPhotos, title }: Props) {
+export function BuildingForm({ form, errors, onChange, photos, title }: Props) {
   const set = <K extends keyof BuildingFormState>(key: K, value: BuildingFormState[K]) =>
     onChange({ ...form, [key]: value });
   const reno = form.renovation;
@@ -41,6 +36,7 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos, title }
   const floors = formFloorKeys(form);
   const summary = summarizeCapacity(form);
   const windowless = windowlessFloors(form.openingRecords);
+  const renovationKey = renovationPhotoKey(form.id);
 
   /** 有効開口部の記録で無窓階と判定される階が新たに出たら「無窓階あり」をオンにする(オフは手動のみ) */
   const setOpeningRecords = (openingRecords: OpeningRecordForm[]) => {
@@ -107,14 +103,12 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos, title }
             photoIds={reno.photoIds}
             captions={reno.photoCaptions}
             readOnly={false}
-            pending={renovationPhotos.pending}
-            onAdd={renovationPhotos.onAdd}
-            onRemove={renovationPhotos.onRemove}
-            onCaption={(id, caption) => {
-              const { [id]: _old, ...rest } = reno.photoCaptions;
-              void _old;
-              setReno({ photoCaptions: caption ? { ...rest, [id]: caption } : rest });
-            }}
+            pending={photos.pending(renovationKey)}
+            onAdd={(files) =>
+              photos.add(renovationKey, files, (b, id) => ({ ...b, renovation: { ...b.renovation, photoIds: [...b.renovation.photoIds, id] } }))
+            }
+            onRemove={(id) => photos.remove([id], (b) => ({ ...b, renovation: withoutPhoto(b.renovation, id) }))}
+            onCaption={(id, caption) => set('renovation', withCaption(reno, id, caption))}
           />
         </div>
       </Section>
@@ -149,6 +143,8 @@ export function BuildingForm({ form, errors, onChange, renovationPhotos, title }
       <section className="section">
         <div className="section-body">
           <OpeningRecordsInput
+            buildingId={form.id}
+            photos={photos}
             records={form.openingRecords}
             floors={floors.filter((f) => !f.startsWith('B'))}
             errors={errors}

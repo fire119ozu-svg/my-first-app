@@ -19,8 +19,8 @@ import {
   newId,
   normalizeInspectors,
   parseInspectors,
+  buildingInfoPhotoIds,
   removedBuildingsWithInput,
-  renovationPhotoKey,
   today,
   updateCaseInfo,
 } from '../logic/inspectionCase';
@@ -120,12 +120,17 @@ function fromLegacyDraft(raw: string): Draft {
   };
 }
 
-/** 下書きの棟を現在の形式に(有効開口部の方角が無かった頃の下書きは方角を空欄に) */
+/** 下書きの棟を現在の形式に(有効開口部の方角・写真が無かった頃の下書きは空欄に) */
 function fromDraftBuilding(b: BuildingFormState): BuildingFormState {
   const f = { ...emptyBuildingForm(b.id), ...b };
   return {
     ...f,
-    openingRecords: f.openingRecords.map((r) => ({ ...r, openings: r.openings.map((o) => ({ ...o, direction: o.direction ?? '' })) })),
+    openingRecords: f.openingRecords.map((r) => ({
+      ...r,
+      photoIds: r.photoIds ?? [],
+      photoCaptions: r.photoCaptions ?? {},
+      openings: r.openings.map((o) => ({ ...o, direction: o.direction ?? '', photoIds: o.photoIds ?? [], photoCaptions: o.photoCaptions ?? {} })),
+    })),
   };
 }
 
@@ -171,7 +176,8 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [pendingPhotos, setPendingPhotos] = useState(0);
+  /** 処理中の写真の枚数(写真の保存キーごと) */
+  const [pendingPhotos, setPendingPhotos] = useState<Record<string, number>>({});
   /** 編集中に外した保存済みの写真(「保存」したときに削除する) */
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
 
@@ -226,21 +232,31 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
     setDraft((d) => d && { ...d, buildings: d.buildings.map((x) => (x.id === id ? fn(x) : x)) });
 
   /** 保存済みの案件にある写真は「保存」まで削除しない(「戻る」で取り消せるように) */
-  const isSavedPhoto = (id: string) => existing?.buildings.some((x) => x.renovation?.photoIds.includes(id)) ?? false;
+  const isSavedPhoto = (id: string) => existing?.buildings.some((x) => buildingInfoPhotoIds(x).includes(id)) ?? false;
   const dropPhotos = (ids: string[]) => {
     setRemovedPhotos((r) => [...r, ...ids.filter(isSavedPhoto)]);
     for (const id of ids.filter((x) => !isSavedPhoto(x))) void deletePhoto(id).catch(() => undefined);
   };
+  const countPending = (key: string, n: number) => setPendingPhotos((p) => ({ ...p, [key]: (p[key] ?? 0) + n }));
 
-  const addRenovationPhotos = async (buildingId: string, files: File[]) => {
-    setPendingPhotos((n) => n + files.length);
+  /**
+   * 対象物情報の入力欄(増改築・有効開口部)に写真を追加する。
+   * attach は最新の入力状態に写真IDを足す関数(処理中に他の入力が変わっても上書きしないように)。
+   */
+  const addPhotos = async (
+    buildingId: string,
+    key: string,
+    files: File[],
+    attach: (b: BuildingFormState, photoId: string) => BuildingFormState,
+  ) => {
+    countPending(key, files.length);
     // 端末のメモリを圧迫しないよう1枚ずつ処理する
     for (const file of files) {
       try {
         const img = await processImage(file);
         const id = newId();
-        await savePhoto({ id, caseId: draft.caseId, itemId: renovationPhotoKey(buildingId), ...img, createdAt: new Date().toISOString() });
-        updateBuildingForm(buildingId, (x) => ({ ...x, renovation: { ...x.renovation, photoIds: [...x.renovation.photoIds, id] } }));
+        await savePhoto({ id, caseId: draft.caseId, itemId: key, ...img, createdAt: new Date().toISOString() });
+        updateBuildingForm(buildingId, (x) => attach(x, id));
       } catch (e) {
         alert(
           e instanceof DOMException && e.name === 'QuotaExceededError'
@@ -248,18 +264,9 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
             : `写真を追加できませんでした(${e instanceof Error ? e.message : String(e)})`,
         );
       } finally {
-        setPendingPhotos((n) => n - 1);
+        countPending(key, -1);
       }
     }
-  };
-
-  const removeRenovationPhoto = (buildingId: string, id: string) => {
-    updateBuildingForm(buildingId, (x) => {
-      const { [id]: _c, ...captions } = x.renovation.photoCaptions;
-      void _c;
-      return { ...x, renovation: { ...x.renovation, photoIds: x.renovation.photoIds.filter((p) => p !== id), photoCaptions: captions } };
-    });
-    dropPhotos([id]);
   };
 
   const addBuilding = () => {
@@ -277,7 +284,7 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
       ? `「${name}」を削除しますか?\nこの棟の判定・メモ・写真も削除されます(「保存」した時点で確定します)。`
       : `「${name}」を削除しますか?`;
     if (!confirm(msg)) return;
-    dropPhotos(target.renovation.photoIds);
+    dropPhotos(buildingInfoPhotoIds(target));
     setDraft({ ...draft, buildings: draft.buildings.filter((x) => x.id !== target.id) });
     setActive(Math.max(0, index - 1));
   };
@@ -429,10 +436,13 @@ export function CaseFormScreen({ caseId }: { caseId?: string }) {
           form={b}
           errors={showErrors ? validation.buildings[current].errors : {}}
           onChange={(form) => updateBuildingForm(b.id, () => form)}
-          renovationPhotos={{
-            pending: pendingPhotos,
-            onAdd: (files) => void addRenovationPhotos(b.id, files),
-            onRemove: (id) => removeRenovationPhoto(b.id, id),
+          photos={{
+            pending: (key) => pendingPhotos[key] ?? 0,
+            add: (key, files, attach) => void addPhotos(b.id, key, files, attach),
+            remove: (ids, detach) => {
+              if (detach) updateBuildingForm(b.id, detach);
+              dropPhotos(ids);
+            },
           }}
         />
 

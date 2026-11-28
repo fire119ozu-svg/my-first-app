@@ -123,6 +123,22 @@ describe('inspectionCase', () => {
     expect(allPhotoIds(c)).toEqual(['r1', 'p1']);
   });
 
+  it('lists opening photos (全景・窓) after renovation photos', () => {
+    const openingRecords = [
+      {
+        id: 'r',
+        floor: '1',
+        memo: '',
+        photoIds: ['g1'],
+        photoCaptions: {},
+        openings: [{ id: 'o', direction: '' as const, location: '', kind: 'full' as const, width: 1, height: 1, count: 1, photoIds: ['w1'], photoCaptions: {} }],
+      },
+    ];
+    let c = createCase(site, [{ ...base, renovation: { status: 'no', location: '', period: '', photoIds: ['r1'], photoCaptions: {} }, openingRecords }], meta);
+    c = addEntryPhoto(c, k('FU-001'), 'p1');
+    expect(allPhotoIds(c)).toEqual(['r1', 'g1', 'w1', 'p1']);
+  });
+
   it('formats and normalizes inspectors', () => {
     expect(formatInspector({ rank: '消防司令補', name: '消防太郎' })).toBe('消防司令補 消防太郎');
     expect(formatInspector({ rank: '', name: '消防太郎' })).toBe('消防太郎');
@@ -168,7 +184,20 @@ describe('multiple buildings', () => {
     c = updateEntry(c, entryKey('a', 'EQ-001'), { result: 'compliant' });
     c = updateEntry(c, entryKey('b', 'EQ-001'), { result: 'nonCompliant' });
     c = addEntryPhoto(c, entryKey('b', 'EQ-001'), 'pb');
-    const withReno = { ...warehouse, renovation: { status: 'no' as const, location: '', period: '', photoIds: ['rb'], photoCaptions: {} } };
+    const withReno = {
+      ...warehouse,
+      renovation: { status: 'no' as const, location: '', period: '', photoIds: ['rb'], photoCaptions: {} },
+      openingRecords: [
+        {
+          id: 'r1',
+          floor: '1',
+          memo: '',
+          photoIds: ['ob'],
+          photoCaptions: {},
+          openings: [{ id: 'o1', direction: '' as const, location: '', kind: 'full' as const, width: 100, height: 100, count: 1, photoIds: ['wb'], photoCaptions: {} }],
+        },
+      ],
+    };
     c = { ...c, buildings: [office, withReno] };
     expect(caseProgress(c, checklistOf(c, 'a').map((id) => entryKey('a', id)))).toMatchObject({ compliant: 1, nonCompliant: 0 });
 
@@ -177,7 +206,7 @@ describe('multiple buildings', () => {
     expect(after.buildings.map((b) => b.id)).toEqual(['a']);
     expect(after.checklists.map((cl) => cl.buildingId)).toEqual(['a']);
     expect(Object.keys(after.entries)).toEqual([entryKey('a', 'EQ-001')]);
-    expect(removedPhotoIds.sort()).toEqual(['pb', 'rb']);
+    expect(removedPhotoIds.sort()).toEqual(['ob', 'pb', 'rb', 'wb']);
   });
 
   it('adds a checklist when a building is added', () => {

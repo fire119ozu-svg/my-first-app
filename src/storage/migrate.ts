@@ -7,6 +7,7 @@
  * - v0.3:対象物情報が1棟のみ(building・itemIds、結果のキーが項目ID)
  * - v0.4:棟に有効開口部の記録(openingRecords)が無い
  * - v0.5:有効開口部に方角(direction)が無い(場所の「東面」等は方角へ移す)
+ * - v0.6:有効開口部の記録・開口部に写真(photoIds・photoCaptions)が無い
  */
 import type {
   BuildingInfo,
@@ -73,6 +74,11 @@ export function splitLegacyBuilding(
 
 const DIRECTIONS: OpeningDirection[] = ['東', '西', '南', '北', '北東', '北西', '南東', '南西'];
 
+/** 写真の欄が無い記録(v0.6以前)に空の欄を足す */
+function withPhotos<T extends { photoIds: string[]; photoCaptions: Record<string, string> }>(x: T): T {
+  return Array.isArray(x.photoIds) ? x : { ...x, photoIds: [], photoCaptions: x.photoCaptions ?? {} };
+}
+
 /** 方角の無い開口部(v0.5以前)。場所が「東面」「東」等だけなら方角へ移す */
 function withDirection(o: WindowOpening): WindowOpening {
   if (typeof o.direction === 'string') return o;
@@ -82,14 +88,17 @@ function withDirection(o: WindowOpening): WindowOpening {
 }
 
 const needsMigration = (b: BuildingInfo) =>
-  !Array.isArray(b.openingRecords) || b.openingRecords.some((r) => r.openings.some((o) => typeof o.direction !== 'string'));
+  !Array.isArray(b.openingRecords) ||
+  b.openingRecords.some(
+    (r) => !Array.isArray(r.photoIds) || r.openings.some((o) => typeof o.direction !== 'string' || !Array.isArray(o.photoIds)),
+  );
 
 /** 有効開口部の記録が無い棟(v0.4以前)に空の記録を足し、方角の無い開口部を変換する */
 function withOpeningRecords(b: BuildingInfo): BuildingInfo {
   if (!needsMigration(b)) return b;
   return {
     ...b,
-    openingRecords: (b.openingRecords ?? []).map((r) => ({ ...r, openings: r.openings.map(withDirection) })),
+    openingRecords: (b.openingRecords ?? []).map((r) => withPhotos({ ...r, openings: r.openings.map((o) => withPhotos(withDirection(o))) })),
   };
 }
 

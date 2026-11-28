@@ -123,6 +123,8 @@ describe('migrateCase', () => {
       ],
     } as unknown as InspectionCase;
     const openings = migrateCase(old).buildings[0].openingRecords[0].openings;
+    expect(migrateCase(old).buildings[0].openingRecords[0]).toMatchObject({ photoIds: [], photoCaptions: {} });
+    expect(openings.every((o) => o.photoIds.length === 0 && Object.keys(o.photoCaptions).length === 0)).toBe(true);
     expect(openings.map((o) => [o.direction, o.location])).toEqual([
       ['東', ''],
       ['北西', '事務室'],
