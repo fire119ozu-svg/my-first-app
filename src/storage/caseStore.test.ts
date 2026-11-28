@@ -2,7 +2,20 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../logic/inspectionCase';
 import type { BuildingInfo } from '../types/inspection';
-import { deleteCase, deletePhoto, getCase, getPhoto, listCases, listPhotosByCase, saveCase, savePhoto } from './caseStore';
+import {
+  deleteCase,
+  deletePhoto,
+  deleteReference,
+  getCase,
+  getPhoto,
+  getReference,
+  listCases,
+  listPhotosByCase,
+  listReferences,
+  saveCase,
+  savePhoto,
+  saveReference,
+} from './caseStore';
 import type { PhotoRecord } from '../types/inspection';
 
 const building: BuildingInfo = {
@@ -50,5 +63,25 @@ describe('caseStore', () => {
     await deleteCase(c.id);
     expect(await listPhotosByCase(c.id)).toEqual([]);
     expect(await getPhoto('x')).toBeDefined(); // 他の案件の写真は残る
+  });
+
+  it('stores reference documents independently of cases', async () => {
+    const r = {
+      id: 'r1', title: '点検要領', category: '点検要領', kind: 'pdf' as const,
+      blob: new Blob([new Uint8Array([37, 80, 68, 70])], { type: 'application/pdf' }),
+      pageCount: 5, fileName: '点検要領.pdf', createdAt: '2026-11-28T00:00:00Z', updatedAt: '2026-11-28T00:00:00Z',
+    };
+    await saveReference(r);
+    await saveReference({ ...r, title: '改題' });
+    expect((await listReferences()).map((x) => x.title)).toEqual(['改題']);
+    const got = await getReference('r1');
+    expect(new Uint8Array(await got!.blob.arrayBuffer())).toEqual(new Uint8Array([37, 80, 68, 70]));
+    // 案件を消しても資料は残る
+    const c = createCase(building, meta);
+    await saveCase(c);
+    await deleteCase(c.id);
+    expect(await getReference('r1')).toBeDefined();
+    await deleteReference('r1');
+    expect(await listReferences()).toEqual([]);
   });
 });

@@ -303,3 +303,22 @@ export interface PhotoRecord {
   /** 追加日時(ISO 8601) */
   createdAt: string;
 }
+
+/**
+ * 参考資料(利用者が端末に取り込んだPDF・画像)。
+ * 端末内のIndexedDBにのみ保存し、外部へは送信しない。案件とは独立。
+ */
+export interface ReferenceRecord {
+  id: string;
+  title: string;
+  /** 分類(例:設置基準、点検要領)。未指定は空文字 */
+  category: string;
+  kind: 'pdf' | 'image';
+  blob: Blob;
+  /** PDFのページ数(画像は1) */
+  pageCount: number;
+  /** 取り込み元のファイル名 */
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
+}

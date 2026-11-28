@@ -2,15 +2,16 @@
  * 検査案件の端末内保存(IndexedDB)。
  * データは端末のブラウザ内にのみ保存され、外部へは送信されない。
  */
-import type { InspectionCase, PhotoRecord } from '../types/inspection';
+import type { InspectionCase, PhotoRecord, ReferenceRecord } from '../types/inspection';
 import { migrateCase } from './migrate';
 
 const DB_NAME = 'fire-inspection';
-/** v1: cases / v2: photos を追加 */
-const DB_VERSION = 2;
+/** v1: cases / v2: photos を追加 / v3: references を追加 */
+const DB_VERSION = 3;
 const CASES = 'cases';
 const PHOTOS = 'photos';
-type StoreName = typeof CASES | typeof PHOTOS;
+const REFERENCES = 'references';
+type StoreName = typeof CASES | typeof PHOTOS | typeof REFERENCES;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -27,6 +28,9 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(PHOTOS)) {
         const store = db.createObjectStore(PHOTOS, { keyPath: 'id' });
         store.createIndex('caseId', 'caseId');
+      }
+      if (!db.objectStoreNames.contains(REFERENCES)) {
+        db.createObjectStore(REFERENCES, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => {
@@ -137,4 +141,24 @@ export async function requestPersistentStorage(): Promise<boolean> {
 /** テスト用:接続をリセットする */
 export function _resetConnectionForTest(): void {
   dbPromise = null;
+}
+
+// ---------------------------------------------------------------------------
+// 参考資料
+// ---------------------------------------------------------------------------
+
+export function listReferences(): Promise<ReferenceRecord[]> {
+  return tx<ReferenceRecord[]>(REFERENCES, 'readonly', (t) => t.objectStore(REFERENCES).getAll());
+}
+
+export function getReference(id: string): Promise<ReferenceRecord | undefined> {
+  return tx<ReferenceRecord | undefined>(REFERENCES, 'readonly', (t) => t.objectStore(REFERENCES).get(id));
+}
+
+export async function saveReference(r: ReferenceRecord): Promise<void> {
+  await tx(REFERENCES, 'readwrite', (t) => t.objectStore(REFERENCES).put(r));
+}
+
+export async function deleteReference(id: string): Promise<void> {
+  await tx(REFERENCES, 'readwrite', (t) => t.objectStore(REFERENCES).delete(id));
 }

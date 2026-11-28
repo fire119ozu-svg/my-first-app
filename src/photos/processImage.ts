@@ -71,10 +71,13 @@ function encode(img: Drawable, width: number, height: number, quality: number): 
   );
 }
 
-export async function processImage(file: Blob): Promise<ProcessedImage> {
+/**
+ * @param maxEdge 保存する画像の長辺(参考資料など文字を読む画像は大きめにする)
+ */
+export async function processImage(file: Blob, maxEdge = PHOTO_MAX_EDGE): Promise<ProcessedImage> {
   const src = await load(file);
   try {
-    const main = fitSize(src.width, src.height, PHOTO_MAX_EDGE);
+    const main = fitSize(src.width, src.height, maxEdge);
     const small = fitSize(src.width, src.height, THUMB_MAX_EDGE);
     const blob = await encode(src.img, main.width, main.height, 0.82);
     const thumb = await encode(src.img, small.width, small.height, 0.7);
