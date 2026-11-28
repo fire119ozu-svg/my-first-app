@@ -76,7 +76,10 @@ function FormPhotoField<T extends { photoIds: string[]; photoCaptions: Record<st
 function openingNote(o: OpeningForm): string | null {
   const width = parseNumber(o.width);
   const height = parseNumber(o.height);
-  if (!width || !height) return null;
+  if (!width || !height) {
+    const entered = o.direction || o.location.trim() || o.width.trim() || o.height.trim() || o.photoIds.length;
+    return entered ? '寸法が未入力のため、判定に含めません' : null;
+  }
   const size = { kind: o.kind, width, height };
   const eff = effectiveSize(size);
   const fmt = (n: number) => String(Math.round(n * 10) / 10);
@@ -335,8 +338,10 @@ export function OpeningRecordsInput(props: {
   const [open, setOpen] = useState(false);
   // 入力に不備があるときは閉じたままにしない
   const shown = open || hasError;
-  const judged = records.filter((r) => r.floor).map((r) => ({ floor: r.floor, result: judgeRecordForm(r).result }));
-  const windowless = judged.filter((x) => x.result === 'windowless').map((x) => floorLabel(x.floor));
+  const judged = records.filter((r) => r.floor).map((r) => ({ floor: r.floor, ...judgeRecordForm(r) }));
+  const windowless = judged
+    .filter((x) => x.result === 'windowless')
+    .map((x) => floorLabel(x.floor) + (x.unmeasured ? '(暫定)' : ''));
   const usedFloors = records.map((r) => r.floor).filter((f): f is FloorKey => !!f);
 
   const add = () => {

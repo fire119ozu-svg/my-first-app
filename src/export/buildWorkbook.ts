@@ -17,7 +17,16 @@ import { addGuidanceSheet, addImprovementSheet, addNoticeSheet, collectFindings 
 import { CATEGORY_LABELS, getChecklistItem } from '../data/checklistItems';
 import { floorKeys, floorLabel, sumPerFloor, asPerFloor } from '../logic/floors';
 import { buildingName, caseProgress, checklistOf, entryKey, formatInspector } from '../logic/inspectionCase';
-import { formatJudgement, isEffectiveOpening, isLargeOpening, judgeRecord, openingKindLabel, openingPlace } from '../logic/openings';
+import {
+  formatJudgement,
+  formatOpeningSize,
+  isEffectiveOpening,
+  isLargeOpening,
+  isMeasured,
+  judgeRecord,
+  openingKindLabel,
+  openingPlace,
+} from '../logic/openings';
 import type { BuildingInfo, ChecklistItem, CheckResult, FloorKey, InspectionCase, OpeningFloorRecord } from '../types/inspection';
 import {
   estimateLines,
@@ -488,8 +497,8 @@ function formatOpeningRecord(rec: OpeningFloorRecord): string {
     .filter(Boolean)
     .join(' / ');
   const lines = rec.openings.map((o) => {
-    const marks = [isEffectiveOpening(o) ? '' : '50cm円不可', isLargeOpening(o) ? '大型' : ''].filter(Boolean).join('・');
-    return `・${openingPlace(o) || '場所未記入'} ${openingKindLabel(o.kind)} ${o.width}×${o.height}cm×${o.count}箇所${marks ? `(${marks})` : ''}`;
+    const marks = isMeasured(o) ? [isEffectiveOpening(o) ? '' : '50cm円不可', isLargeOpening(o) ? '大型' : ''].filter(Boolean).join('・') : '';
+    return `・${openingPlace(o) || '場所未記入'} ${openingKindLabel(o.kind)} ${formatOpeningSize(o)}×${o.count}箇所${marks ? `(${marks})` : ''}`;
   });
   return [head, ...lines, ...(rec.memo ? [`メモ:${rec.memo}`] : [])].join('\n');
 }
@@ -619,7 +628,7 @@ function addPhotoSheet(wb: Workbook, ctx: Ctx) {
         },
         ...rec.openings.map((o) => ({
           heading: `${prefix}有効開口部 ${floor} ${openingPlace(o) || '場所未記入'}`,
-          memo: `${openingKindLabel(o.kind)} ${o.width}×${o.height}cm×${o.count}箇所`,
+          memo: `${openingKindLabel(o.kind)} ${formatOpeningSize(o)}×${o.count}箇所`,
           photos: toPhotos(o.photoIds ?? []),
           captions: o.photoCaptions ?? {},
         })),

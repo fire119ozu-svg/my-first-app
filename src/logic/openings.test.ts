@@ -64,6 +64,30 @@ describe('judgeOpenings(無窓階の判定)', () => {
     expect(openingPlace({ direction: '', location: '' })).toBe('');
   });
 
+  it('寸法が未入力の開口部は判定に含めず、箇所数を表示する', () => {
+    const j = judgeOpenings('1', 30, [{ ...big, count: 2 }, { kind: 'full', count: 3 }, { kind: 'sliding', width: 180, count: 1 }]);
+    expect(j).toMatchObject({ largeCount: 2, unmeasured: 4, result: 'normal' });
+    expect(formatJudgement(j)).toBe('有効開口 2.08㎡/必要 1㎡超・大型開口部 2/2 → 普通階(暫定。寸法未入力の4箇所は含まず)');
+    // 画面の入力でも同じ(幅だけ・空欄・写真だけの開口部)
+    const r = recordForm({
+      floorArea: '30',
+      openings: [
+        { ...emptyOpening('full'), width: '80', height: '130', count: '2' },
+        { ...emptyOpening(), width: '180' },
+        { ...emptyOpening(), photoIds: ['w'] },
+        emptyOpening(),
+      ],
+    });
+    expect(judgeRecordForm(r)).toMatchObject({ unmeasured: 2, result: 'normal' });
+    // 暫定の無窓階は「無窓階あり」の自動オンに使わない
+    const small = { ...r, floorArea: '1000' };
+    expect(judgeRecordForm(small).result).toBe('windowless');
+    expect(windowlessFloors([small])).toEqual([]);
+    expect(windowlessFloors([{ ...small, openings: small.openings.slice(0, 1) }])).toEqual(['1']);
+    // 床面積だけ入力した段階(開口部が未入力)では自動オンにしない
+    expect(windowlessFloors([recordForm({ floorArea: '100' })])).toEqual([]);
+  });
+
   it('床面積が未入力なら判定しない', () => {
     const j = judgeOpenings('1', undefined, [big]);
     expect(j.result).toBeNull();
@@ -76,7 +100,7 @@ function recordForm(patch: Partial<OpeningRecordForm> = {}): OpeningRecordForm {
 }
 
 describe('入力フォーム', () => {
-  it('入力途中の値で判定し、読めない開口部は除く', () => {
+  it('入力途中の値で判定し、読めない寸法は未入力として扱う', () => {
     const r = recordForm({
       floorArea: '６０',
       openings: [
@@ -87,7 +111,8 @@ describe('入力フォーム', () => {
     });
     expect(judgeRecordForm(r)).toMatchObject({ largeCount: 2, result: 'normal' });
     expect(windowlessFloors([r])).toEqual([]);
-    expect(windowlessFloors([{ ...r, floorArea: '1000' }])).toEqual(['1']);
+    expect(judgeRecordForm(r).unmeasured).toBe(1);
+    expect(windowlessFloors([{ ...r, floorArea: '1000', openings: r.openings.slice(0, 2) }])).toEqual(['1']);
   });
 
   it('保存用に変換する(空の階・開口部は除き、階の順に並べる)', () => {
@@ -129,18 +154,16 @@ describe('入力フォーム', () => {
   it('写真だけの階・開口部も残し、コメントは添付中のものだけにする', () => {
     const o = { ...emptyOpening(), photoIds: ['w1'], photoCaptions: { w1: ' 東側 ', w9: '外した写真' } };
     const r = recordForm({ floor: '2', photoIds: ['p1'], photoCaptions: { p1: '', p2: 'x' }, openings: [o] });
+    // 寸法が空でも保存できる(判定には含めない)
     const { records, errors } = validateOpeningRecords([r], ['1', '2']);
-    // 窓は寸法が必要
-    expect(errors).toEqual({
-      [`opening:${o.id}:width`]: '幅を数値(cm)で入力してください',
-      [`opening:${o.id}:height`]: '高さを数値(cm)で入力してください',
-    });
+    expect(errors).toEqual({});
+    expect(records[0].openings[0]).not.toHaveProperty('width');
+    expect(records[0].openings[0]).not.toHaveProperty('height');
     const ok = validateOpeningRecords([{ ...r, openings: [{ ...o, width: '100', height: '100' }] }], ['1', '2']);
     expect(ok.records[0]).toMatchObject({ photoIds: ['p1'], photoCaptions: {} });
     expect(ok.records[0].openings[0]).toMatchObject({ photoIds: ['w1'], photoCaptions: { w1: ' 東側 ' } });
     expect(openingPhotoIds(ok.records)).toEqual(['p1', 'w1']);
     // 全景写真だけの階も記録として残す
     expect(validateOpeningRecords([recordForm({ floor: '1', photoIds: ['p3'], openings: [emptyOpening()] })], ['1']).records).toHaveLength(1);
-    void records;
   });
 });
