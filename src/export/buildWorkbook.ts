@@ -319,7 +319,7 @@ function addChecklistSheet(wb: Workbook, ctx: Ctx, exportedAt: Date) {
   const note = ws.getCell(r, 1);
   note.value =
     `作成日時 ${exportedAt.toLocaleString('ja-JP')}。チェック項目は主要な設置基準を簡略化した判定により抽出しており、` +
-    '構造による緩和・階ごとの判定・免除特例は含まない。「条番号要確認」の条番号は高知市例規集で確認すること。';
+    '構造による緩和・階ごとの判定・免除特例は含まない。高知市火災予防条例は平成28年4月1日改正までの条文と照合している。';
   note.font = { name: FONT, size: 8, color: { argb: 'FF6E6E73' } };
   note.alignment = { wrapText: true, vertical: 'top' };
   ws.getRow(r).height = 26;

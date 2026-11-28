@@ -6,8 +6,8 @@
  * 構造(耐火・準耐火)による面積緩和、階ごとの判定、各種の免除・特例は
  * 含まない。抽出結果は「確認すべき候補」として扱い、最終判断は検査員が行うこと。
  *
- * 高知市火災予防条例の条番号は火災予防条例(例)の構成に準拠して記載している。
- * verified: false の条番号は高知市例規集で照合してから運用すること。
+ * 高知市火災予防条例の条番号・内容は、条例本文(平成28年4月1日条例第62号による改正まで)と
+ * 照合済み(verified: true)。それ以降の改正の有無は高知市例規集で確認すること。
  */
 import type {
   ApplicabilityCondition,
@@ -25,7 +25,6 @@ import { USAGE_6I } from './usageCategories';
 // 条件記述ヘルパー
 // ---------------------------------------------------------------------------
 
-const always: ApplicabilityCondition = { type: 'always' };
 const usage = (...codes: UsageCategory[]): ApplicabilityCondition => ({ type: 'usage', in: codes });
 const area = (gte: number): ApplicabilityCondition => ({ type: 'totalFloorArea', gte });
 const capacity = (gte: number): ApplicabilityCondition => ({ type: 'capacity', gte });
@@ -51,8 +50,8 @@ const law = (name: LawName, article: string, verified = true): LegalBasis => ({
   article,
   verified,
 });
-/** 高知市火災予防条例(条番号は例規集との照合待ち) */
-const kochi = (article: string, verified = false): LegalBasis =>
+/** 高知市火災予防条例(平成28年4月1日改正までの本文と照合済み) */
+const kochi = (article: string, verified = true): LegalBasis =>
   law('高知市火災予防条例', article, verified);
 
 // ---------------------------------------------------------------------------
@@ -149,7 +148,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '防火対象物使用開始届出',
     checkPoint: '使用開始の7日前までに使用開始届出がされているか。用途・営業者変更時に届出がされているか。',
     legalBasis: [kochi('第43条')],
-    condition: always,
+    // 令別表第1(19)項・(20)項は届出の対象外
+    condition: not(usage('19', '20')),
     severity: 'medium',
   },
   {
@@ -167,16 +167,17 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
       facility('storageBattery'),
     ),
     severity: 'medium',
-    note: '届出対象規模(例:厨房設備は入力合計350kW以上、変電設備は全出力20kW超)は条例で確認。',
+    note: '届出対象(条例第44条):据付面積2㎡以上の炉、同一厨房室の入力合計350kW以上の厨房設備、入力70kW以上の温風暖房機・給湯湯沸設備、ボイラー、乾燥設備、サウナ設備、高圧・特別高圧の変電設備(全出力50kW以下を除く)、燃料電池発電設備、固定の内燃機関発電設備、蓄電池設備、2kVA以上のネオン管灯設備など(個人の住居に設けるものを除く場合あり)。',
   },
   {
     id: 'NT-003',
     category: 'notification',
     title: '少量危険物貯蔵取扱届出',
-    checkPoint: '指定数量の1/5以上指定数量未満の危険物について、貯蔵・取扱いの届出がされているか。',
+    checkPoint: '指定数量の1/5以上指定数量未満の危険物について、貯蔵・取扱いの届出がされているか。廃止した場合に届出がされているか。',
     legalBasis: [kochi('第46条')],
     condition: facility('smallQuantityHazmat'),
     severity: 'medium',
+    note: '個人の住居で貯蔵・取り扱う場合は指定数量の1/2以上が届出対象(条例第46条第1項)。廃止時も届出が必要(同条第2項)。',
   },
   {
     id: 'NT-004',
@@ -465,8 +466,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     id: 'EV-001',
     category: 'evacuation',
     title: '廊下・階段・避難口の物件存置',
-    checkPoint: '廊下・階段・避難口等に避難の支障となる物件が置かれていないか。',
-    legalBasis: [law('消防法', '第8条の2の4'), law('消防法施行令', '第4条の2の3')],
+    checkPoint: '廊下・階段・避難口等に避難の支障となる物件が置かれていないか。床面がつまずき・すべりを生じない状態に維持されているか。',
+    legalBasis: [law('消防法', '第8条の2の4'), law('消防法施行令', '第4条の2の3'), kochi('第40条')],
     condition: not(usage('18', '19', '20')),
     severity: 'high',
   },
@@ -474,8 +475,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     id: 'EV-002',
     category: 'evacuation',
     title: '防火戸の閉鎖障害',
-    checkPoint: '防火戸の閉鎖範囲に物品・くさび・ドアストッパー等の閉鎖障害がないか。',
-    legalBasis: [law('消防法', '第8条の2の4'), law('消防法施行令', '第4条の2の3')],
+    checkPoint: '防火戸の閉鎖範囲に物品・くさび・ドアストッパー等の閉鎖障害がないか。防火設備の近くに延焼の媒介となる可燃物が置かれていないか。',
+    legalBasis: [law('消防法', '第8条の2の4'), law('消防法施行令', '第4条の2の3'), kochi('第41条')],
     condition: not(usage('18', '19', '20')),
     severity: 'high',
   },
@@ -483,8 +484,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     id: 'EV-003',
     category: 'evacuation',
     title: '避難口の施錠管理',
-    checkPoint: '営業中・在館中に避難口が施錠されていないか。屋内から鍵を用いずに解錠できるか。',
-    legalBasis: [law('消防法', '第8条の2の4'), kochi('避難管理に関する規定(条番号要確認)')],
+    checkPoint: '営業中・在館中に避難口が施錠されていないか。屋内から鍵を用いずに解錠できるか(または非常時に自動解錠するか)。避難口の戸は外開きか。',
+    legalBasis: [law('消防法', '第8条の2の4'), kochi('第40条第2号・第3号')],
     condition: not(usage('18', '19', '20')),
     severity: 'high',
   },
@@ -493,9 +494,10 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'evacuation',
     title: '客席の避難通路・定員',
     checkPoint: '客席の避難通路の幅員が確保されているか。定員を超えて入場させていないか。',
-    legalBasis: [kochi('劇場等の客席に関する規定(条番号要確認)')],
+    legalBasis: [kochi('第35条〜第39条')],
     condition: usage(...U1, ...U2, ...U3, '4'),
     severity: 'medium',
+    note: '劇場等の客席(第35条・第36条)、キャバレー等・飲食店で客席150㎡以上の階は幅1.6m(飲食店1.2m)以上の避難通路(第37条)、ディスコ等(第37条の2)、個室型店舗(第37条の3)、百貨店等で売場150㎡以上の階は主要避難通路1.2m(300㎡以上1.6m)以上(第38条)、劇場等の定員(第39条)。',
   },
 
   // ===== 火気使用設備・器具 =====
@@ -508,13 +510,14 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     legalBasis: [kochi('第3条の4')],
     condition: facility('kitchen'),
     severity: 'high',
+    note: '排気ダクト等は可燃物から10cm以上離隔。油脂を含む蒸気を発生する厨房設備の天蓋にはグリス除去装置・火炎伝送防止装置。特定用途の地階または高さ31m超の建築物で、同一厨房室の入力合計350kW以上の場合は自動消火装置とする(第3条の4第1項第2号エ)。',
   },
   {
     id: 'FU-002',
     category: 'fireUse',
     title: 'ボイラー・給湯湯沸設備',
     checkPoint: '可燃物との離隔距離、燃料タンク・配管の漏れ、安全装置の作動状態。',
-    legalBasis: [kochi('第4条')],
+    legalBasis: [kochi('第4条'), kochi('第8条の2')],
     condition: facility('boiler'),
     severity: 'medium',
   },
@@ -532,7 +535,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     category: 'fireUse',
     title: '暖房機・ストーブ等',
     checkPoint: '可燃物との離隔距離、給油時の消火、転倒時の安全装置、周囲での可燃物の乾燥・放置がないか。',
-    legalBasis: [kochi('第3条の3'), kochi('第18条〜第21条')],
+    legalBasis: [kochi('第3条の3'), kochi('第5条'), kochi('第18条〜第21条')],
     condition: facility('heater'),
     severity: 'medium',
   },
@@ -553,6 +556,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     legalBasis: [kochi('第13条')],
     condition: facility('storageBattery'),
     severity: 'low',
+    note: '定格容量と電槽数の積の合計が4,800Ah・セル未満のものを除く(条例第13条)。',
   },
   {
     id: 'FU-007',
@@ -560,6 +564,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '喫煙・裸火使用等の制限',
     checkPoint: '指定場所(劇場・百貨店等の舞台・客席・売場等)で喫煙・裸火使用・危険物持込みがされていないか。禁止標識・喫煙所の標識が掲示されているか。',
     legalBasis: [kochi('第23条')],
+    note: '対象は劇場等の舞台・客席、百貨店等の売場・展示部分、重要文化財等の建造物の内部・周囲などのうち消防長が指定する場所。標識は地を赤、文字を白(同条第2項)。',
     condition: usage(...U1, '4', '16イ', '16の2', '16の3', '17'),
     severity: 'medium',
   },
@@ -571,7 +576,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     title: '少量危険物の貯蔵・取扱い',
     checkPoint:
       '容器の転倒・漏れ防止、標識・掲示板、消火器の設置、火気の管理。指定数量以上に達していないか(無許可貯蔵の有無)。',
-    legalBasis: [kochi('第30条〜第31条の8'), law('消防法', '第10条第1項')],
+    legalBasis: [kochi('第30条〜第32条'), law('消防法', '第10条第1項')],
     condition: facility('smallQuantityHazmat'),
     severity: 'high',
   },

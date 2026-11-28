@@ -206,8 +206,7 @@ export interface LegalBasis {
   article: string;
   /**
    * 条番号を原典で確認済みか。
-   * 条例の条番号は火災予防条例(例)に準拠して記載しており、
-   * 高知市例規集との照合が済むまで false とする。
+   * 条例本文との照合が済んでいないものは false とし、画面・Excelに「条番号要確認」と表示する。
    */
   verified: boolean;
 }
