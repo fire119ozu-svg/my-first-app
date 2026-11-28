@@ -199,7 +199,7 @@ export function addNoticeSheet(wb: ExcelJS.Workbook, c: InspectionCase, hasFindi
   [19, 20, 21].forEach((r) => height(ws, r, 1.3));
 
   // 備考
-  put(ws, 22, 1, 24, 1, '備\n考', { align: 'center', valign: 'top', border: true });
+  put(ws, 22, 1, 24, 1, '備\n考', { align: 'center', valign: 'middle', border: true });
   put(ws, 22, 2, 24, 10, '', { border: true });
   [22, 23, 24].forEach((r) => height(ws, r, 1.5));
 
