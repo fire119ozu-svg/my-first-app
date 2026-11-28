@@ -84,7 +84,15 @@ function InspectorRow(props: {
   );
 }
 
-export function InspectorsInput({ value, onChange }: { value: Inspector[]; onChange: (v: Inspector[]) => void }) {
+export function InspectorsInput({
+  value,
+  onChange,
+  hint,
+}: {
+  value: Inspector[];
+  onChange: (v: Inspector[]) => void;
+  hint?: string;
+}) {
   // 行の識別用(削除しても入力中の行が入れ替わらないように)
   const [keys, setKeys] = useState(() => value.map((_, i) => i));
   const [nextKey, setNextKey] = useState(value.length);
@@ -118,6 +126,7 @@ export function InspectorsInput({ value, onChange }: { value: Inspector[]; onCha
       <button type="button" className="inspector-add" onClick={add}>
         ＋ 検査員を追加
       </button>
+      {hint && <p className="field-hint">{hint}</p>}
     </fieldset>
   );
 }
